@@ -1,0 +1,50 @@
+# Pre-commit hooks para o projeto ALPR
+# Instalação:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Uso manual:
+#   pre-commit run --all-files
+
+repos:
+  # ----- Hooks básicos -----
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.(md|txt)$'
+      - id: end-of-file-fixer
+        exclude: '\.(md|txt)$'
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=2048']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+        exclude: '\.(bat|ps1)$'
+
+  # ----- Ruff — lint + auto-fix + import sort -----
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # ----- Black — formatação (complementar ao ruff-format) -----
+  # Deixado opcional; descomente se preferir black sobre ruff-format.
+  # - repo: https://github.com/psf/black
+  #   rev: 24.4.2
+  #   hooks:
+  #     - id: black
+
+  # ----- Mypy — type check (modo permissivo) -----
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        # Rodar mypy só em src/ (tests são excluídos via pyproject.toml)
+        files: ^src/
+        additional_dependencies:
+          - types-PyYAML

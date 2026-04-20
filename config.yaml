@@ -1,0 +1,123 @@
+# ============================================================
+# ALPR 2.0 - Configuracao principal
+# ============================================================
+
+models:
+  detector:
+    confidence: 0.25
+    default: yolo11l-plate.pt
+    device: auto
+    dir: models/yolo
+    enable_sahi: true
+    sahi_slice_size: 640
+    sahi_overlap_ratio: 0.25
+    sahi_retry_confidence_threshold: 0.55
+    sahi_retry_area_ratio_threshold: 0.01
+    sahi_retry_large_image_threshold: 1600
+    sahi_merge_iou_threshold: 0.45
+
+ocr:
+  engine: paddle
+  try_multiple_variants: true
+  max_variants: 5
+  top_k_candidates: 5
+  paddle:
+    lang: pt
+    use_gpu: true
+    use_angle_cls: true
+    det_limit_side_len: 960
+    rec_batch_num: 6
+    min_score: 0.3
+
+premium_api:
+  enabled: false
+  provider: platerecognizer
+  api_key: ""
+  regions:
+    - br
+  min_confidence: 0.5
+  timeout: 30
+  log_all_calls: true
+
+pipeline:
+  crop_margin: 0.10
+  ocr_confidence_threshold: 0.6
+  fallback_confidence_threshold: 0.8
+
+temporal_voting:
+  enabled: true
+  strategy: hybrid
+  min_observations: 2
+
+video:
+  vehicle_mode: moving
+  skip_frames: 2
+  max_frames: 0
+  generate_output_video: true
+  output_dir: data/results
+  confidence_threshold: 0.6
+
+artifacts:
+  enabled: true
+  output_dir: data/results/artifacts
+  save_invalid: true
+  save_low_confidence: true
+  confidence_threshold: 0.75
+  max_saved_per_run: 50
+
+scenarios:
+  low_light:
+    brightness_threshold: 90.0
+    contrast_threshold: 40.0
+    ocr_confidence_threshold: 0.50
+    fallback_confidence_threshold: 0.72
+    max_variants: 6
+  small_plate:
+    area_ratio_threshold: 0.015
+    height_threshold: 60
+    ocr_confidence_threshold: 0.55
+    fallback_confidence_threshold: 0.75
+    max_variants: 6
+  video:
+    moving:
+      skip_frames: 2
+      temporal_min_observations: 2
+    stationary:
+      skip_frames: 5
+      temporal_min_observations: 3
+
+evaluation:
+  fixtures_dir: data/fixtures
+  manifest_path: data/fixtures/manifest.template.json
+  reports_dir: data/results/evaluation
+
+calibration:
+  detector_thresholds: [0.20, 0.25, 0.30]
+  ocr_thresholds: [0.55, 0.60, 0.65]
+  fallback_thresholds: [0.70, 0.80, 0.90]
+
+quality:
+  enabled: true
+  low_quality_threshold: 0.45
+  snr_review_threshold: 9.0
+  motion_blur_review_threshold: 0.35
+
+forensic:
+  enabled: true
+  jpeg_quality: 90
+  review_threshold: 0.55
+  high_risk_threshold: 0.75
+
+reports:
+  enabled: true
+  output_dir: data/results/reports
+  prefer_artifact_dir: true
+
+llm_validation:
+  enabled: false
+  base_url: http://127.0.0.1:11434
+  model: ""
+  timeout: 20.0
+  allow_override: true
+  ambiguity_gap_threshold: 0.12
+  min_decision_confidence: 0.70

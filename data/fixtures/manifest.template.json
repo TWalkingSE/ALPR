@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "id": "sample-image-001",
+      "path": "images/sample-image-001.jpg",
+      "media_type": "image",
+      "expected_plate": "ABC1D23",
+      "expected_format": "mercosul",
+      "scenario_tags": [
+        "low_light",
+        "small_plate"
+      ],
+      "notes": "Substitua por uma amostra real antes de rodar a baseline."
+    }
+  ]
+}

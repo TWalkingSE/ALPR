@@ -1,0 +1,40 @@
+# ============================================================
+# ALPR 2.0
+#
+# NOTA: As dependencias oficiais estao em pyproject.toml.
+# Este arquivo existe apenas para compatibilidade com
+# ferramentas que esperam requirements.txt.
+#
+# Para instalar:
+#   pip install -e .              (usa pyproject.toml)
+#   pip install -e ".[dev]"       (com ferramentas de teste)
+#
+# Para GPU CUDA 12.x:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+#
+# PaddleOCR/PaddlePaddle fazem parte das dependencias do projeto.
+# Plate Recognizer continua opcional e depende apenas da variavel
+# PLATE_RECOGNIZER_API_KEY para o fluxo Premium.
+# ============================================================
+
+# Gerado a partir de pyproject.toml - NÃO edite aqui, edite pyproject.toml
+opencv-contrib-python
+numpy
+streamlit
+ultralytics
+pandas
+pyyaml
+pillow
+python-dotenv
+tqdm
+matplotlib
+blinker
+typing-extensions
+torch
+torchvision
+torchaudio
+httpx
+av
+moviepy
+paddleocr>=3.4.1
+paddlepaddle>=3.3.1

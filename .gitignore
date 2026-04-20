@@ -1,0 +1,52 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv/
+env/
+
+# Arquivos sensíveis - NÃO versionar!
+.env
+*.key
+*.pem
+
+# Modelos grandes
+models/**/*.pt
+models/**/*.pth
+models/**/*.onnx
+models/**/*.pb
+
+# Dados e resultados
+data/results/
+data/**/*.mp4
+data/**/*.avi
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Testes
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporários
+*.tmp
+*.log
+*.bak
+temp/
+tmp/
