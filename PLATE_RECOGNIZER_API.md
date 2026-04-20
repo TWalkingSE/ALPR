@@ -1,46 +1,46 @@
 # Plate Recognizer API no ALPR 2.0
 
-Este documento explica como o fluxo Premium funciona no projeto e como interpretar a configuracao de confianca minima.
+Este documento explica como o fluxo Premium funciona no projeto e como interpretar a configuração de confiança mínima.
 
 ## Papel da API no projeto
 
-No ALPR 2.0, a Plate Recognizer nao e um fallback automatico do OCR local.
+No ALPR 2.0, a Plate Recognizer não é um fallback automático do OCR local.
 
-Ela funciona como um segundo fluxo, acionado manualmente, para comparar o resultado local com uma API externa que ja faz seu proprio pipeline completo de:
+Ela funciona como um segundo fluxo, acionado manualmente, para comparar o resultado local com uma API externa que já faz seu próprio pipeline completo de:
 
-- deteccao da placa
+- detecção da placa
 - OCR
-- classificacao de regiao
+- classificação de região
 - candidatos alternativos
-- metadados do veiculo
+- metadados do veículo
 
 No projeto atual:
 
-- o fluxo local roda primeiro, se o usuario quiser
-- o fluxo Premium e opcional
+- o fluxo local roda primeiro, se o usuário quiser
+- o fluxo Premium é opcional
 - o resultado Premium aparece lado a lado com o local
-- a UI nao expoe a chave da API; ela deve ficar no `.env`
+- a UI não expõe a chave da API; ela deve ficar no `.env`
 
-## Quantas consultas o usuario tem de graca
+## Quantas consultas o usuário tem de graça
 
-No momento desta documentacao, o plano `FREE` do `Plate Recognizer Snapshot` oferece:
+No momento desta documentação, o plano `FREE` do `Plate Recognizer Snapshot` oferece:
 
-- `2.500 lookups por mes`
+- `2.500 lookups por mês`
 
 Pontos importantes:
 
-- isso e uma `free trial`, pensada para avaliacao
-- a propria pagina de pricing informa que a free trial nao deve ser usada em producao
+- isso é uma `free trial`, pensada para avaliação
+- a própria página de pricing informa que a free trial não deve ser usada em produção
 - no plano gratuito, a API Cloud tem limite de `1 lookup por segundo`
-- nos planos pagos, a documentacao oficial informa `8 lookups por segundo` por padrao
+- nos planos pagos, a documentação oficial informa `8 lookups por segundo` por padrão
 
-No contexto deste projeto, cada clique no botao `Analisar com Plate Recognizer` consome 1 lookup.
+No contexto deste projeto, cada clique no botão `Analisar com Plate Recognizer` consome 1 lookup.
 
 ## Como a API Plate Recognizer funciona
 
 O projeto usa a linha `Snapshot Cloud API`.
 
-### Autenticacao
+### Autenticação
 
 A API usa token no header HTTP:
 
@@ -50,7 +50,7 @@ Authorization: Token SUA_API_KEY
 
 ### Endpoint principal
 
-O endpoint principal para leitura de placas em imagem e:
+O endpoint principal para leitura de placas em imagem é:
 
 ```http
 POST https://api.platerecognizer.com/v1/plate-reader/
@@ -58,16 +58,16 @@ POST https://api.platerecognizer.com/v1/plate-reader/
 
 Para evitar ambiguidade:
 
-- o fluxo `FREE` considerado neste documento nao faz consulta de video
-- no projeto atual, a integracao Premium com Plate Recognizer e apenas para imagem
-- videos continuam sendo tratados pelo pipeline local do ALPR 2.0
+- o fluxo `FREE` considerado neste documento não faz consulta de vídeo
+- no projeto atual, a integração Premium com Plate Recognizer é apenas para imagem
+- vídeos continuam sendo tratados pelo pipeline local do ALPR 2.0
 
 ### O que o projeto envia
 
 O projeto atual envia:
 
 - a `imagem completa` em multipart/form-data
-- o parametro `regions`, hoje normalmente com `['br']`
+- o parâmetro `regions`, hoje normalmente com `['br']`
 
 Internamente, `src/premium_alpr.py` faz:
 
@@ -80,19 +80,19 @@ Internamente, `src/premium_alpr.py` faz:
 
 ### Resposta principal da API
 
-Os campos mais importantes da resposta oficial sao:
+Os campos mais importantes da resposta oficial são:
 
 - `results[].plate`: texto da placa
-- `results[].score`: confianca do OCR da placa
-- `results[].dscore`: confianca da deteccao da placa
+- `results[].score`: confiança do OCR da placa
+- `results[].dscore`: confiança da detecção da placa
 - `results[].box`: bbox da placa
-- `results[].region.code`: codigo da regiao estimada
-- `results[].vehicle.type`: tipo do veiculo
+- `results[].region.code`: código da região estimada
+- `results[].vehicle.type`: tipo do veículo
 - `results[].candidates`: candidatos alternativos
 
 O projeto converte isso para `PremiumALPRResult`.
 
-### Estatisticas de uso
+### Estatísticas de uso
 
 Para consultar consumo, a API tem:
 
@@ -102,13 +102,13 @@ GET https://api.platerecognizer.com/v1/statistics/
 
 A resposta inclui campos como:
 
-- `usage.calls`: quantas chamadas voce ja consumiu no periodo atual
+- `usage.calls`: quantas chamadas você já consumiu no período atual
 - `usage.resets_on`: quando a contagem reseta
-- `total_calls`: cota maxima do plano atual
+- `total_calls`: cota máxima do plano atual
 
 O projeto usa esse endpoint em `_check_availability()` para validar credencial e ter uma ideia do uso atual.
 
-## Configuracao no projeto
+## Configuração no projeto
 
 ### 1. Criar ou editar o `.env`
 
@@ -136,11 +136,11 @@ premium_api:
 streamlit run app.py
 ```
 
-Na aba de imagem, use o botao `Analisar com Plate Recognizer`.
+Na aba de imagem, use o botão `Analisar com Plate Recognizer`.
 
 ## Como o projeto interpreta o `min_confidence`
 
-O `min_confidence` do projeto nao muda o threshold interno do motor da Plate Recognizer na nuvem.
+O `min_confidence` do projeto não muda o threshold interno do motor da Plate Recognizer na nuvem.
 
 Ele funciona como filtro local depois da resposta.
 
@@ -148,63 +148,63 @@ Ou seja:
 
 - a API responde com um `score`
 - o projeto pega o melhor resultado
-- se `score < premium_api.min_confidence`, o resultado volta com `success=True`, mas marcado como abaixo do minimo
+- se `score < premium_api.min_confidence`, o resultado volta com `success=True`, mas marcado como abaixo do mínimo
 
-Isso e importante porque voce continua vendo que a API respondeu, mas a leitura pode ser tratada como fraca para fins operacionais.
+Isso é importante porque você continua vendo que a API respondeu, mas a leitura pode ser tratada como fraca para fins operacionais.
 
-## Melhor confianca minima Premium
+## Melhor confiança mínima Premium
 
-Se a pergunta for "qual valor usar por padrao neste projeto", a melhor resposta pratica e:
+Se a pergunta for "qual valor usar por padrão neste projeto", a melhor resposta prática é:
 
 - `0.70` como ponto de partida mais equilibrado
 
 Motivo:
 
-- `0.50` e permissivo demais para uso operacional e tende a deixar passar leituras mais duvidosas
-- `0.70` costuma equilibrar melhor `recall` e `precisao` quando a API esta sendo usada como segunda opiniao
-- `0.80` ou mais reduz falso positivo, mas comeca a perder placas mais dificeis, sobretudo em baixa iluminacao, blur ou distancia
+- `0.50` é permissivo demais para uso operacional e tende a deixar passar leituras mais duvidosas
+- `0.70` costuma equilibrar melhor `recall` e `precisão` quando a API está sendo usada como segunda opinião
+- `0.80` ou mais reduz falso positivo, mas começa a perder placas mais difíceis, sobretudo em baixa iluminação, blur ou distância
 
-Resumo pratico:
+Resumo prático:
 
 | Objetivo | Valor sugerido |
 |---|---|
-| comparacao exploratoria, POC, nao perder candidatos | `0.50` |
-| uso geral no ALPR 2.0, com comparacao lado a lado | `0.70` |
+| comparação exploratória, POC, não perder candidatos | `0.50` |
+| uso geral no ALPR 2.0, com comparação lado a lado | `0.70` |
 | fluxo mais conservador, evitando falso positivo | `0.80` |
 
-Se voce estiver usando a API so para comparar com o pipeline local, `0.70` tende a ser o melhor default.
+Se você estiver usando a API só para comparar com o pipeline local, `0.70` tende a ser o melhor default.
 
 Se estiver fazendo triagem humana depois, `0.50` ainda faz sentido.
 
-## Melhor pratica para `regions`
+## Melhor prática para `regions`
 
-A documentacao oficial recomenda informar os estados ou paises mais provaveis observados pela camera, tipicamente os 3 ou 4 principais.
+A documentação oficial recomenda informar os estados ou países mais prováveis observados pela câmera, tipicamente os 3 ou 4 principais.
 
-No projeto atual, o default e:
+No projeto atual, o default é:
 
 - `['br']`
 
-Isso faz sentido quando o alvo principal sao placas brasileiras.
+Isso faz sentido quando o alvo principal são placas brasileiras.
 
-Se sua camera observa frota mista de paises vizinhos, vale ampliar esse campo.
+Se sua câmera observa frota mista de países vizinhos, vale ampliar esse campo.
 
 ## Erros comuns
 
-### Token invalido ou problema de credito
+### Token inválido ou problema de crédito
 
-Na documentacao oficial da Snapshot Cloud, erros de credencial ou falta de creditos podem aparecer como `403`.
+Na documentação oficial da Snapshot Cloud, erros de credencial ou falta de créditos podem aparecer como `403`.
 
-Na pratica, dependendo do endpoint, plano ou momento da verificacao, integracoes tambem podem ver respostas como `401` ou `402`.
+Na prática, dependendo do endpoint, plano ou momento da verificação, integrações também podem ver respostas como `401` ou `402`.
 
 ### Rate limit
 
-`429` significa excesso de requisicoes. Na free trial, o limite oficial informado e `1 lookup por segundo`.
+`429` significa excesso de requisições. Na free trial, o limite oficial informado é `1 lookup por segundo`.
 
 ### Nenhuma placa detectada
 
 Nesse caso, a chamada HTTP pode ter funcionado normalmente, mas `results[]` vem vazio.
 
-## Uso programatico
+## Uso programático
 
 ```python
 import os
@@ -231,15 +231,15 @@ else:
 
 ## Resumo objetivo
 
-- plano gratis atual: `2.500 lookups/mes`
-- uso gratis e para avaliacao, nao para producao
-- plano `FREE` considerado aqui nao cobre consulta de video
+- plano grátis atual: `2.500 lookups/mês`
+- uso grátis é para avaliação, não para produção
+- plano `FREE` considerado aqui não cobre consulta de vídeo
 - endpoint principal: `POST /v1/plate-reader/`
-- o projeto envia a imagem completa, nao o crop
-- `min_confidence` e filtro local aplicado depois da resposta
-- melhor default pratico para este projeto: `0.70`
+- o projeto envia a imagem completa, não o crop
+- `min_confidence` é filtro local aplicado depois da resposta
+- melhor default prático para este projeto: `0.70`
 
-## Referencias oficiais
+## Referências oficiais
 
 - https://platerecognizer.com/pricing/
 - https://guides.platerecognizer.com/docs/snapshot/api-reference
