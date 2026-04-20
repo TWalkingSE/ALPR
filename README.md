@@ -2,6 +2,8 @@
 
 ALPR 2.0 é um projeto de leitura de placas focado em execução local, previsibilidade operacional e diagnóstico. O caminho principal roda offline com YOLOv11 + OpenCV + PaddleOCR. O caminho Premium via Plate Recognizer existe como comparação manual, não como fallback automático. A integração com Ollama é opcional e aparece apenas depois do top-k como desempate controlado.
 
+<img width="2067" height="1182" alt="image" src="https://github.com/user-attachments/assets/55ac4169-11a4-4a1e-82fe-996c3b2c6c46" />
+
 ## Resumo rápido
 
 - pipeline local principal para imagem e vídeo
