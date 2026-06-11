@@ -1,18 +1,18 @@
 # src/ocr/paddle_engine.py
 """
-PaddleOCR Engine — OCR determinístico clássico como alternativa aos VLMs Ollama.
+PaddleOCR Engine — OCR determinístico clássico, principal engine do ALPR 2.0.
 
-Diferencial em relação a GLM/OLMoOCR2:
+Características:
 - Totalmente offline e determinístico (mesma saída para a mesma entrada).
 - Expõe **confiança por caractere** nativa (char_confidences reais, não reconstruídas).
 - Muito mais leve que VLMs 7B; roda em CPU razoavelmente bem.
 - Não precisa de Ollama nem de modelos pullados; só do pacote `paddleocr`.
 
 Limitações:
-- Qualidade em placas BR é inferior à de VLMs bem prompted — mas é um bom 3º
-  engine e excelente para rodar offline sem GPU.
+- Em placas BR muito degradadas, a qualidade depende fortemente do crop e do
+  preprocessamento; mas roda offline, sem GPU obrigatória e de forma determinística.
 
-Instalação (opcional — não está em requirements.txt por padrão):
+Instalação:
     pip install paddleocr paddlepaddle       # CPU (recomendado no Windows)
 """
 
@@ -35,6 +35,17 @@ logger = logging.getLogger(__name__)
 
 _RE_OLD = re.compile(r'^[A-Z]{3}[0-9]{4}$')
 _RE_MERCOSUL = re.compile(r'^[A-Z]{3}[0-9][A-Z][0-9]{2}$')
+
+# Tokens de cabeçalho/decoração que aparecem em placas brasileiras e NÃO fazem
+# parte da identificação alfanumérica (ex.: "BRASIL", "MERCOSUL", país e UF).
+# São descartados antes da montagem do texto para não contaminar a leitura.
+_HEADER_WORDS = frozenset({'BRASIL', 'MERCOSUL', 'MERCOSUR'})
+_BRAZIL_UFS = frozenset({
+    'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS',
+    'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC',
+    'SP', 'SE', 'TO',
+})
+_SHORT_HEADER_WORDS = _BRAZIL_UFS | frozenset({'BR'})
 
 
 def _paddle_available() -> bool:
@@ -77,6 +88,8 @@ class PaddleOCREngine(OCREngine):
         det_limit_side_len: int = 960,
         rec_batch_num: int = 6,
         min_score: float = 0.3,
+        add_quiet_zone: bool = False,
+        quiet_zone_ratio: float = 0.12,
     ):
         """
         Args:
@@ -88,6 +101,11 @@ class PaddleOCREngine(OCREngine):
             det_limit_side_len: Lado máximo após redimensionamento interno.
             rec_batch_num: Tamanho do batch no reconhecimento.
             min_score: Confiança mínima nativa do PaddleOCR para aceitar um resultado.
+            add_quiet_zone: Se True, adiciona uma borda branca ("zona de silêncio")
+                ao redor do crop antes do OCR. Em crops de placa muito apertados,
+                isso estabiliza a detecção da linha de texto do PaddleOCR e evita
+                que caracteres das extremidades sejam cortados.
+            quiet_zone_ratio: Espessura da borda como fração da menor dimensão.
         """
         self.lang = lang
         self.use_gpu = use_gpu
@@ -97,6 +115,8 @@ class PaddleOCREngine(OCREngine):
         self.det_limit_side_len = det_limit_side_len
         self.rec_batch_num = rec_batch_num
         self.min_score = min_score
+        self.add_quiet_zone = add_quiet_zone
+        self.quiet_zone_ratio = quiet_zone_ratio
         self._ocr: Optional[Any] = None
         self.active_device: Optional[str] = None
         self.init_error: Optional[str] = None
@@ -182,12 +202,34 @@ class PaddleOCREngine(OCREngine):
 
         try:
             prepared = self._prepare_input_image(image)
+            if self.add_quiet_zone:
+                prepared = self._apply_quiet_zone(prepared, self.quiet_zone_ratio)
             raw = self._ocr.predict(prepared)
         except Exception as e:
             logger.error(f"PaddleOCR falhou: {e}", exc_info=True)
             return []
 
         return self._parse_paddlex_output(raw)
+
+    @staticmethod
+    def _apply_quiet_zone(image: np.ndarray, ratio: float = 0.12) -> np.ndarray:
+        """
+        Adiciona uma borda branca ao redor da imagem (zona de silêncio).
+
+        Crops de placa muito justos podem fazer o detector de texto do PaddleOCR
+        cortar caracteres nas extremidades. Uma margem branca cria contraste de
+        fundo e estabiliza a detecção da linha. Operação puramente aditiva.
+        """
+        if image is None or image.size == 0:
+            return image
+        height, width = image.shape[:2]
+        border = max(4, int(round(min(height, width) * max(0.0, ratio))))
+        return cv2.copyMakeBorder(
+            image,
+            border, border, border, border,
+            borderType=cv2.BORDER_CONSTANT,
+            value=(255, 255, 255),
+        )
 
     @staticmethod
     def _prepare_input_image(image: np.ndarray) -> np.ndarray:
@@ -240,6 +282,7 @@ class PaddleOCREngine(OCREngine):
             bbox = polys[index] if index < len(polys) else None
             fragments.append((cleaned, score, bbox))
 
+        fragments = cls._filter_header_fragments(fragments)
         if not fragments:
             return []
 
@@ -263,6 +306,8 @@ class PaddleOCREngine(OCREngine):
                 engine=cls.engine_name,
                 char_confidences=char_confs,
                 bbox=fragments[0][2] if fragments else None,
+                native_confidence=max(0.0, min(1.0, avg_score)),
+                format_score=format_aderence_confidence(concat_clean),
             )]
 
         fragments.sort(
@@ -278,6 +323,8 @@ class PaddleOCREngine(OCREngine):
             engine=cls.engine_name,
             char_confidences=char_confs,
             bbox=best_bbox,
+            native_confidence=max(0.0, min(1.0, float(best_score))),
+            format_score=format_aderence_confidence(best_text),
         )]
 
     @classmethod
@@ -311,10 +358,39 @@ class PaddleOCREngine(OCREngine):
             if cleaned:
                 fragments.append((cleaned, score, bbox))
 
+        fragments = cls._filter_header_fragments(fragments)
         if not fragments:
             return []
 
         return cls._rank_fragments_to_results(fragments)
+
+    @staticmethod
+    def _filter_header_fragments(
+        fragments: List[tuple[str, float, Any]],
+    ) -> List[tuple[str, float, Any]]:
+        """
+        Remove fragmentos que correspondem a cabeçalhos da placa (ex.: "BRASIL",
+        "MERCOSUL", "BR", siglas de UF) para que não contaminem a montagem do
+        texto da placa.
+
+        Conservador: nunca esvazia a lista. Tokens longos de cabeçalho (BRASIL,
+        MERCOSUL) são sempre descartados; tokens curtos (UF, "BR") só são
+        descartados se sobrar algum fragmento "plausível de placa" (>= 4 chars).
+        """
+        if not fragments:
+            return fragments
+
+        non_header = [f for f in fragments if f[0] not in _HEADER_WORDS]
+        if not non_header:
+            # Tudo era cabeçalho longo — manter original para não perder dados.
+            return fragments
+
+        has_plate_like = any(len(f[0]) >= 4 for f in non_header)
+        if has_plate_like:
+            filtered = [f for f in non_header if f[0] not in _SHORT_HEADER_WORDS]
+            if filtered:
+                return filtered
+        return non_header
 
     @staticmethod
     def _clean_plate_text(text: str) -> str:
@@ -346,14 +422,18 @@ class PaddleOCREngine(OCREngine):
         """
         Combina a confiança nativa do PaddleOCR com aderência ao formato BR.
 
-        - Native score é per-fragmento, já por-caractere agregado; mantemos como base.
-        - Se o texto casa com formato BR, aplicamos um bônus pequeno (cap 1.0).
-        - Se não casa, aplicamos um desconto leve.
+        A confiança de LEITURA (native_score) é a base e domina o valor. A
+        aderência ao formato entra apenas como um ajuste leve (peso 0.2) para
+        não mascarar incerteza real de caracteres — o ranking por formato e
+        plausibilidade já é feito separadamente no pipeline (n-gram, validador).
+
+        Para acesso desacoplado, o engine também expõe `native_confidence` e
+        `format_score` no OCRResult.
         """
         native_score = max(0.0, min(1.0, float(native_score)))
         fmt_bonus = format_aderence_confidence(text)  # 0.88 Mercosul, 0.85 Old, etc.
-        # Média ponderada: 70% nativo + 30% aderência ao formato
-        combined = 0.7 * native_score + 0.3 * fmt_bonus
+        # Média ponderada: 80% leitura nativa + 20% aderência ao formato
+        combined = 0.8 * native_score + 0.2 * fmt_bonus
         return max(0.0, min(1.0, combined))
 
     def __repr__(self) -> str:

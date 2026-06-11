@@ -7,11 +7,6 @@ Mapas de caracteres similares, formatos de placa e definições compartilhadas.
 import re
 
 
-# ==================== MODELOS PADRÃO ====================
-
-DEFAULT_GLM_OCR_MODEL = 'glm-ocr:bf16'
-DEFAULT_OLMOCR_MODEL = 'richardyoung/olmocr2:7b-q8'
-
 # ==================== CARACTERES SIMILARES (OCR) ====================
 
 # Mapeamento bidirecional de caracteres visualmente similares.

@@ -1,18 +1,18 @@
 # Contributing
 
-Este documento descreve como contribuir com o ALPR 2.0 sem quebrar o fluxo local, a documentação e a validação automatizada.
+Este documento descreve como contribuir com o ALPR 2.0 sem quebrar o fluxo local, a documentaÃ§Ã£o e a validaÃ§Ã£o automatizada.
 
 ## Escopo
 
-Contribuições são bem-vindas para:
+ContribuiÃ§Ãµes sÃ£o bem-vindas para:
 
-- correção de bugs
-- melhoria de detector, OCR, validação e vídeo
+- correÃ§Ã£o de bugs
+- melhoria de detector, OCR, validaÃ§Ã£o e vÃ­deo
 - testes automatizados
-- documentação operacional
+- documentaÃ§Ã£o operacional
 - ergonomia da interface Streamlit
 
-Mudanças grandes de arquitetura, troca de dependências pesadas ou alterações de pipeline que mudem comportamento operacional devem vir acompanhadas de contexto técnico claro e impacto esperado.
+MudanÃ§as grandes de arquitetura, troca de dependÃªncias pesadas ou alteraÃ§Ãµes de pipeline que mudem comportamento operacional devem vir acompanhadas de contexto tÃ©cnico claro e impacto esperado.
 
 ## Requisitos
 
@@ -20,7 +20,7 @@ Mudanças grandes de arquitetura, troca de dependências pesadas ou alterações
 - ambiente virtual local
 - pelo menos um peso YOLO de placas em `models/yolo/` para subir o fluxo local
 
-O repositório não inclui por padrão:
+O repositÃ³rio nÃ£o inclui por padrÃ£o:
 
 - `.env` com chaves privadas
 - pesos YOLO locais `.pt`
@@ -43,7 +43,7 @@ python install_dependencies.py
 
 Se quiser usar o fluxo Premium, copie `.env.example` para `.env` e configure `PLATE_RECOGNIZER_API_KEY`.
 
-## Rodando a aplicação
+## Rodando a aplicaÃ§Ã£o
 
 ```bash
 streamlit run app.py
@@ -51,7 +51,7 @@ streamlit run app.py
 
 ## Testes
 
-Suíte padrão:
+SuÃ­te padrÃ£o:
 
 ```bash
 python -m pytest tests -q
@@ -63,7 +63,7 @@ Com verbosidade:
 python -m pytest tests -v --tb=short
 ```
 
-Testes marcados como `integration` ficam fora da execução padrão. Se precisar rodar explicitamente:
+Testes marcados como `integration` ficam fora da execuÃ§Ã£o padrÃ£o. Se precisar rodar explicitamente:
 
 ```bash
 python -m pytest -m integration
@@ -91,51 +91,51 @@ mypy src/ --ignore-missing-imports
 
 ## Pre-commit
 
-Instalação:
+InstalaÃ§Ã£o:
 
 ```bash
 pre-commit install
 ```
 
-Execução manual:
+ExecuÃ§Ã£o manual:
 
 ```bash
 pre-commit run --all-files
 ```
 
-## Regras práticas para contribuir
+## Regras prÃ¡ticas para contribuir
 
-- não versione `.env`, chaves, tokens ou credenciais
-- não versione pesos grandes em `models/yolo/` nem mídia gerada em `data/results/`
-- mantenha as mudanças focadas; evite misturar refatoração ampla com bugfix pequeno
-- se o comportamento do pipeline mudar, atualize a documentação correspondente
-- se uma mudança afetar heurística, OCR, top-k, vídeo ou Premium, inclua ou ajuste testes
-- preserve o princípio atual do projeto: OCR principal local, Plate Recognizer opcional e Ollama opcional depois do top-k
+- nÃ£o versione `.env`, chaves, tokens ou credenciais
+- nÃ£o versione pesos grandes em `models/yolo/` nem mÃ­dia gerada em `data/results/`
+- mantenha as mudanÃ§as focadas; evite misturar refatoraÃ§Ã£o ampla com bugfix pequeno
+- se o comportamento do pipeline mudar, atualize a documentaÃ§Ã£o correspondente
+- se uma mudanÃ§a afetar heurÃ­stica, OCR, top-k, vÃ­deo ou Premium, inclua ou ajuste testes
+- preserve o princÃ­pio atual do projeto: OCR principal local, Plate Recognizer opcional e Ollama opcional depois do top-k
 
 ## Pull requests
 
-Antes de abrir PR, o mínimo esperado é:
+Antes de abrir PR, o mÃ­nimo esperado Ã©:
 
-1. a aplicação ainda subir localmente
+1. a aplicaÃ§Ã£o ainda subir localmente
 2. os testes relevantes passarem
-3. a documentação afetada estar alinhada
-4. nenhum arquivo sensível ou artefato grande ter entrado no diff
+3. a documentaÃ§Ã£o afetada estar alinhada
+4. nenhum arquivo sensÃ­vel ou artefato grande ter entrado no diff
 
-Na descrição do PR, deixe claro:
+Na descriÃ§Ã£o do PR, deixe claro:
 
 - problema resolvido
 - abordagem adotada
-- risco de regressão
+- risco de regressÃ£o
 - comandos usados para validar
 
-## Dicas para mídia e modelos
+## Dicas para mÃ­dia e modelos
 
-Se sua mudança depende de pesos, fixtures grandes ou vídeos reais:
+Se sua mudanÃ§a depende de pesos, fixtures grandes ou vÃ­deos reais:
 
-- não envie o binário bruto para o repositório
+- nÃ£o envie o binÃ¡rio bruto para o repositÃ³rio
 - documente como reproduzir localmente
 - use caminhos ignorados pelo Git para artefatos pesados
 
-## Licença
+## LicenÃ§a
 
-Ao contribuir, você concorda em disponibilizar sua contribuição sob a mesma licença MIT usada neste projeto.
+Ao contribuir, vocÃª concorda em disponibilizar sua contribuiÃ§Ã£o sob a mesma licenÃ§a MIT usada neste projeto.

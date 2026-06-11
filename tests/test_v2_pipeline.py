@@ -227,3 +227,35 @@ def test_local_pipeline_applies_optional_llm_override_after_top_k():
     assert results[0].llm_validation['model'] == 'qwen3.5:9b-q8_0'
     assert 'llm_override' in results[0].warnings
     assert results[0].report_payload['llm_validation']['applied_override'] is True
+
+
+class TestVariantPrioritization:
+    def test_is_binary_image_detects_threshold(self):
+        binary = np.where(np.arange(300).reshape(10, 30) % 2 == 0, 0, 255).astype(np.uint8)
+        assert LocalAnalysisPipeline._is_binary_image(binary) is True
+
+    def test_is_binary_image_false_for_grayscale(self):
+        gray = np.arange(256, dtype=np.uint8).reshape(16, 16)
+        assert LocalAnalysisPipeline._is_binary_image(gray) is False
+
+    def test_is_binary_image_false_for_color(self):
+        color = np.full((10, 30, 3), 128, dtype=np.uint8)
+        assert LocalAnalysisPipeline._is_binary_image(color) is False
+
+    def test_prioritize_puts_grayscale_before_binary(self):
+        rng = np.tile(np.arange(60, dtype=np.uint8), (20, 1))  # gradiente, muitos níveis
+        gray = (rng % 200 + 20).astype(np.uint8)
+        gray2 = (rng % 180 + 30).astype(np.uint8)
+        binary = np.where(np.arange(1200).reshape(20, 60) % 2 == 0, 0, 255).astype(np.uint8)
+
+        ordered = LocalAnalysisPipeline._prioritize_ocr_variants([binary, gray, gray2])
+        # As duas grayscale devem vir antes da binarizada.
+        assert LocalAnalysisPipeline._is_binary_image(ordered[0]) is False
+        assert LocalAnalysisPipeline._is_binary_image(ordered[1]) is False
+        assert LocalAnalysisPipeline._is_binary_image(ordered[-1]) is True
+
+    def test_prioritize_drops_empty_variants(self):
+        rng = np.tile(np.arange(60, dtype=np.uint8), (20, 1))
+        gray = (rng % 200 + 20).astype(np.uint8)
+        ordered = LocalAnalysisPipeline._prioritize_ocr_variants([None, np.array([]), gray])
+        assert len(ordered) == 1

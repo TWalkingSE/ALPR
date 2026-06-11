@@ -187,9 +187,67 @@ class TestRecognizeWithMock:
         assert results == []
 
 
+class TestHeaderFiltering:
+    def test_removes_brasil_header(self):
+        fragments = [('BRASIL', 0.99, None), ('ABC1D23', 0.90, None)]
+        filtered = PaddleOCREngine._filter_header_fragments(fragments)
+        texts = [f[0] for f in filtered]
+        assert 'BRASIL' not in texts
+        assert 'ABC1D23' in texts
+
+    def test_removes_uf_and_country_code_when_plate_present(self):
+        fragments = [('BR', 0.95, None), ('SP', 0.95, None), ('ABC1D23', 0.90, None)]
+        filtered = PaddleOCREngine._filter_header_fragments(fragments)
+        texts = [f[0] for f in filtered]
+        assert texts == ['ABC1D23']
+
+    def test_keeps_short_token_when_no_plate_like_fragment(self):
+        # Sem fragmento >= 4 chars, não descartar tokens curtos (evita perder dados).
+        fragments = [('BR', 0.95, None), ('AB', 0.90, None)]
+        filtered = PaddleOCREngine._filter_header_fragments(fragments)
+        assert len(filtered) >= 1
+
+    def test_never_returns_empty_when_only_headers(self):
+        fragments = [('BRASIL', 0.99, None), ('MERCOSUL', 0.98, None)]
+        filtered = PaddleOCREngine._filter_header_fragments(fragments)
+        assert len(filtered) >= 1
+
+    def test_parse_paddlex_ignores_brasil_header(self):
+        raw = [{
+            'rec_texts': ['BRASIL', 'ABC1D23'],
+            'rec_scores': [0.99, 0.91],
+            'rec_polys': [
+                [[0, 0], [80, 0], [80, 20], [0, 20]],
+                [[0, 25], [120, 25], [120, 70], [0, 70]],
+            ],
+        }]
+        results = PaddleOCREngine._parse_paddlex_output(raw)
+        assert len(results) == 1
+        assert results[0]['text'] == 'ABC1D23'
+
+
+class TestDecoupledConfidenceFields:
+    def test_native_and_format_score_exposed(self):
+        raw = [{
+            'rec_texts': ['ABC1D23'],
+            'rec_scores': [0.80],
+            'rec_polys': [[[0, 0], [100, 0], [100, 50], [0, 50]]],
+        }]
+        results = PaddleOCREngine._parse_paddlex_output(raw)
+        assert len(results) == 1
+        result = results[0]
+        assert result['native_confidence'] == pytest.approx(0.80, abs=0.01)
+        assert result['format_score'] > 0.8  # Mercosul tem aderência alta
+
+    def test_native_confidence_dominates(self):
+        # Peso da leitura nativa (0.8) deve dominar o ajuste de formato.
+        low = PaddleOCREngine._combine_confidence(0.40, 'ABC1D23')
+        high = PaddleOCREngine._combine_confidence(0.95, 'ABC1D23')
+        assert high - low > 0.35
+
+
 class TestOCRManagerIntegration:
     """PaddleOCR deve ser aceito pelo OCRManager sem alteração (polimorfismo)."""
-
     def test_manager_accepts_paddle_engine(self):
         from src.ocr.manager import OCRManager
 
@@ -200,3 +258,48 @@ class TestOCRManagerIntegration:
         manager = OCRManager(engine=engine, auto_fallback_on_failure=False)
         results = manager.recognize(_dummy_image())
         assert results == []
+
+
+class TestQuietZone:
+    def test_apply_quiet_zone_adds_white_border(self):
+        img = np.zeros((40, 120, 3), dtype=np.uint8)
+        padded = PaddleOCREngine._apply_quiet_zone(img, ratio=0.1)
+        assert padded.shape[0] > img.shape[0]
+        assert padded.shape[1] > img.shape[1]
+        # Cantos devem ser brancos (borda adicionada).
+        assert tuple(padded[0, 0]) == (255, 255, 255)
+
+    def test_quiet_zone_applied_before_predict_when_enabled(self):
+        with patch('src.ocr.paddle_engine._paddle_available', return_value=False):
+            engine = PaddleOCREngine(add_quiet_zone=True, quiet_zone_ratio=0.1)
+
+        fake_paddle = MagicMock()
+        fake_paddle.predict.return_value = [{
+            'rec_texts': ['ABC1D23'],
+            'rec_scores': [0.91],
+            'rec_polys': [[[0, 0], [100, 0], [100, 50], [0, 50]]],
+        }]
+        engine._ocr = fake_paddle
+        engine.is_available = True
+
+        engine.recognize(_dummy_image(h=100, w=300))
+        prepared = fake_paddle.predict.call_args.args[0]
+        # Imagem enviada ao Paddle deve ser maior que a original (borda aplicada).
+        assert prepared.shape[0] > 100
+        assert prepared.shape[1] > 300
+
+    def test_quiet_zone_off_by_default(self):
+        with patch('src.ocr.paddle_engine._paddle_available', return_value=False):
+            engine = PaddleOCREngine()
+        assert engine.add_quiet_zone is False
+
+        fake_paddle = MagicMock()
+        fake_paddle.predict.return_value = [{
+            'rec_texts': ['ABC1D23'], 'rec_scores': [0.91],
+            'rec_polys': [[[0, 0], [100, 0], [100, 50], [0, 50]]],
+        }]
+        engine._ocr = fake_paddle
+        engine.is_available = True
+        engine.recognize(_dummy_image(h=100, w=300))
+        prepared = fake_paddle.predict.call_args.args[0]
+        assert prepared.shape == (100, 300, 3)  # sem borda

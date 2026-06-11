@@ -156,3 +156,65 @@ class TestOCRManager:
         out = mgr.recognize(_dummy_image(), original_image=_dummy_image())
         # Pode retornar vazio ou o resultado da original; o importante é não crashar
         assert isinstance(out, list)
+
+
+class _PerCallEngine(OCREngine):
+    """Engine que retorna leituras diferentes a cada chamada (por variante)."""
+
+    engine_name = 'percall'
+
+    def __init__(self, readings):
+        # readings: lista de (texto, confiança)
+        self._readings = readings
+        self._idx = 0
+
+    def recognize(self, image):
+        if self._idx >= len(self._readings):
+            return []
+        text, conf = self._readings[self._idx]
+        self._idx += 1
+        return [create_ocr_result(text=text, confidence=conf, engine=self.engine_name)]
+
+
+class TestConsensusCharConfidences:
+    def test_divergent_position_gets_lower_confidence(self):
+        # Variantes concordam em tudo, exceto na 5ª posição (índice 4): D vs O.
+        engine = _PerCallEngine([
+            ('ABC1D23', 0.90),
+            ('ABC1D23', 0.85),
+            ('ABC1O23', 0.70),
+        ])
+        mgr = OCRManager(engine=engine, try_multiple_variants=True)
+        variants = [_dummy_image(), _dummy_image()]  # principal + 2 variantes = 3 chamadas
+        out = mgr.recognize(_dummy_image(), preprocessed_variants=variants)
+
+        assert len(out) == 1
+        best = out[0]
+        assert best['text'] == 'ABC1D23'
+        assert best['confidence'] == 0.90  # confiança da linha não muda
+        char_confs = best['char_confidences']
+        assert len(char_confs) == 7
+        conf_pos4 = char_confs[4][1]
+        conf_pos0 = char_confs[0][1]
+        # A posição divergente deve ter confiança menor que uma posição de consenso.
+        assert conf_pos4 < conf_pos0
+
+    def test_full_agreement_keeps_high_confidence(self):
+        engine = _PerCallEngine([
+            ('ABC1D23', 0.92),
+            ('ABC1D23', 0.90),
+        ])
+        mgr = OCRManager(engine=engine, try_multiple_variants=True)
+        out = mgr.recognize(_dummy_image(), preprocessed_variants=[_dummy_image()])
+        char_confs = out[0]['char_confidences']
+        assert len(char_confs) == 7
+        # Concordância total → todas as posições com confiança alta (~conf média).
+        assert all(c[1] > 0.85 for c in char_confs)
+
+    def test_single_reading_no_consensus_change(self):
+        # Sem variantes adicionais não há consenso a calcular: não deve crashar.
+        results = [create_ocr_result(text='ABC1D23', confidence=0.9, engine='fake')]
+        engine = _FakeEngine(results=results)
+        mgr = OCRManager(engine=engine, try_multiple_variants=False)
+        out = mgr.recognize(_dummy_image())
+        assert out[0]['text'] == 'ABC1D23'

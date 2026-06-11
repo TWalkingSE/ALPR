@@ -227,8 +227,11 @@ class PlateValidator:
         normalized = re.sub(r'[-\s]', '', clean_text)
 
         # === MATCH EXATO: já é válido em algum formato ===
+        # Nota: placas Mercosul brasileiras (LLLNLNN) aceitam QUALQUER letra na
+        # 5ª posição (índice 4), incluindo vogais. A conversão do formato antigo
+        # mapeia dígitos para letras (0->A, 4->E, 8->I), que são vogais válidas.
         is_exact_old = bool(self.re_old.match(normalized))
-        is_exact_merc = bool(self.re_mercosul.match(normalized)) and normalized[4] not in 'AEIOU'
+        is_exact_merc = bool(self.re_mercosul.match(normalized))
 
         # Se o format_hint contradiz o match exato, tentar correção para o
         # formato hintado ANTES de aceitar o match exato.
@@ -360,29 +363,16 @@ class PlateValidator:
         corrected = []
         total_score = 1.0  # Score multiplicativo
 
-        for i, (char, exp_type) in enumerate(zip(text, expected, strict=False)):
+        for char, exp_type in zip(text, expected, strict=False):
+            # Mercosul aceita qualquer letra na 5ª posição (incluindo vogais),
+            # portanto nenhuma posição de letra precisa de tratamento especial.
             if exp_type == 'L' and char.isalpha():
-                # Para Mercosul posição 4: rejeitar vogais mesmo que já seja letra
-                if format_type == 'mercosul' and i == 4 and char in 'AEIOU':
-                    replacement, weight = self._find_best_replacement_weighted(
-                        char, exp_type, exclude_vowels=True
-                    )
-                    if replacement:
-                        corrected.append(replacement)
-                        total_score *= weight
-                    else:
-                        return None, 0.0
-                else:
-                    corrected.append(char)
+                corrected.append(char)
             elif exp_type == 'N' and char.isdigit():
                 corrected.append(char)
             else:
                 # Caractere não bate com tipo esperado — buscar substituição
-                # Para Mercosul posição 4: excluir vogais das alternativas
-                exclude_vowels = (format_type == 'mercosul' and i == 4 and exp_type == 'L')
-                replacement, weight = self._find_best_replacement_weighted(
-                    char, exp_type, exclude_vowels=exclude_vowels
-                )
+                replacement, weight = self._find_best_replacement_weighted(char, exp_type)
                 if replacement:
                     corrected.append(replacement)
                     total_score *= weight  # Penalizar pela confusão
@@ -395,8 +385,7 @@ class PlateValidator:
         if format_type == 'old' and self.is_old_format(result):
             return result, total_score
         elif format_type == 'mercosul' and self.is_mercosul_format(result):
-            if result[4] not in 'AEIOU':
-                return result, total_score
+            return result, total_score
 
         return None, 0.0
 
@@ -517,7 +506,7 @@ class PlateValidator:
         if self.is_old_format(text):
             score = 1.0
         elif self.is_mercosul_format(text):
-            score = 1.0 if text[4] not in 'AEIOU' else 0.8
+            score = 1.0
         else:
             # Verificar quantas posições batem com cada formato
             old_match = sum(1 for i, c in enumerate(text) if
@@ -619,9 +608,8 @@ class PlateValidator:
             if self.is_old_format(text):
                 return f"{text[:3]}-{text[3:]}"
             elif self.is_mercosul_format(text):
-                # Verificar regra de vogal na posição 5
-                if text[4] not in 'AEIOU':
-                    return text
+                # Mercosul aceita qualquer letra na 5ª posição, inclusive vogais.
+                return text
             return None
 
         # Pegar a primeira posição ambígua
@@ -683,8 +671,6 @@ class PlateValidator:
                 matches += 1
 
         score = matches / len(expected)
-        if format_type == 'mercosul' and len(clean) > 4 and clean[4] in 'AEIOU':
-            score *= 0.75
         return float(score)
 
     def describe_validation(self, plate: str, format_hint: Optional[str] = None) -> Dict[str, Any]:
@@ -694,7 +680,7 @@ class PlateValidator:
         validity = self.check_plate_validity(plate, format_hint=format_hint)
         normalized_suggested = re.sub(r'[-\s]', '', suggested_plate or '')
         exact_old = bool(self.re_old.match(normalized) or self.re_old_with_hyphen.match(clean))
-        exact_mercosul = bool(self.re_mercosul.match(normalized)) and (len(normalized) <= 4 or normalized[4] not in 'AEIOU')
+        exact_mercosul = bool(self.re_mercosul.match(normalized))
 
         issues = list(validity.get('errors', []))
         if len(normalized) != 7:
@@ -777,11 +763,9 @@ class PlateValidator:
         if chosen_format == 'mercosul':
             result["format"] = "mercosul"
             result["normalized_plate"] = normalized
-            if normalized[4] in "AEIOU":
-                result["errors"].append("No formato Mercosul, a letra na 5ª posição não pode ser vogal")
-                result["is_valid"] = False
-            else:
-                result["is_valid"] = True
+            # Mercosul (LLLNLNN) aceita qualquer letra na 5ª posição, incluindo
+            # vogais — não há regra que as proíba no padrão brasileiro.
+            result["is_valid"] = True
         elif chosen_format == 'old':
             norm_clean = re.sub(r'[-\s]', '', clean)
             result["format"] = "old"

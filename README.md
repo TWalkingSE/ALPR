@@ -1,22 +1,20 @@
 # ALPR 2.0
 
-ALPR 2.0 é um projeto de leitura de placas focado em execução local, previsibilidade operacional e diagnóstico. O caminho principal roda offline com YOLOv11 + OpenCV + PaddleOCR. O caminho Premium via Plate Recognizer existe como comparação manual, não como fallback automático. A integração com Ollama é opcional e aparece apenas depois do top-k como desempate controlado.
+ALPR 2.0 Ã© um projeto de leitura de placas focado em execuÃ§Ã£o local, previsibilidade operacional e diagnÃ³stico. O caminho principal roda offline com YOLOv11 + OpenCV + PaddleOCR. O caminho Premium via Plate Recognizer existe como comparaÃ§Ã£o manual, nÃ£o como fallback automÃ¡tico. A integraÃ§Ã£o com Ollama Ã© opcional e aparece apenas depois do top-k como desempate controlado.
 
-<img width="2067" height="1182" alt="image" src="https://github.com/user-attachments/assets/55ac4169-11a4-4a1e-82fe-996c3b2c6c46" />
+## Resumo rÃ¡pido
 
-## Resumo rápido
-
-- pipeline local principal para imagem e vídeo
-- OCR principal local e determinístico com PaddleOCR
-- SAHI, normalização, preprocessamento adaptativo e votação temporal
-- Plate Recognizer opcional para comparação manual
+- pipeline local principal para imagem e vÃ­deo
+- OCR principal local e determinÃ­stico com PaddleOCR
+- SAHI, normalizaÃ§Ã£o, preprocessamento adaptativo e votaÃ§Ã£o temporal
+- Plate Recognizer opcional para comparaÃ§Ã£o manual
 - Ollama opcional apenas depois do top-k
-- Python 3.11+, interface Streamlit e licença MIT
-- validação automatizada mais recente do workspace: `350 passed`
+- Python 3.11+, interface Streamlit e licenÃ§a MIT
+- validaÃ§Ã£o automatizada mais recente do workspace: `384 passed`
 
-## Início rápido
+## InÃ­cio rÃ¡pido
 
-Se você só quer colocar o projeto de pé em um clone limpo:
+Se vocÃª sÃ³ quer colocar o projeto de pÃ© em um clone limpo:
 
 ```bash
 python -m venv venv
@@ -29,76 +27,76 @@ streamlit run app.py
 
 Antes de rodar, tenha em mente:
 
-- o repositório público não inclui `.env`, pesos YOLO locais nem resultados gerados
-- sem um arquivo `.pt` válido em `models/yolo/`, o fluxo local não inicializa
-- `PLATE_RECOGNIZER_API_KEY` só é necessário para o fluxo Premium
+- o repositÃ³rio pÃºblico nÃ£o inclui `.env`, pesos YOLO locais nem resultados gerados
+- sem um arquivo `.pt` vÃ¡lido em `models/yolo/`, o fluxo local nÃ£o inicializa
+- `PLATE_RECOGNIZER_API_KEY` sÃ³ Ã© necessÃ¡rio para o fluxo Premium
 - Ollama continua opcional e fora do caminho principal do OCR
 
-## Navegação rápida
+## NavegaÃ§Ã£o rÃ¡pida
 
 - [O que o projeto entrega](#o-que-o-projeto-entrega)
-- [Limites práticos](#limites-práticos)
-- [Fluxos da aplicação](#fluxos-da-aplicação)
-- [Instalação detalhada](#instalação-detalhada)
+- [Limites prÃ¡ticos](#limites-prÃ¡ticos)
+- [Fluxos da aplicaÃ§Ã£o](#fluxos-da-aplicaÃ§Ã£o)
+- [InstalaÃ§Ã£o detalhada](#instalaÃ§Ã£o-detalhada)
 - [Bootstrap de um clone limpo](#bootstrap-de-um-clone-limpo)
 - [Contributing](CONTRIBUTING.md)
-- [Validação](#validação)
-- [Licença](#licença)
+- [ValidaÃ§Ã£o](#validaÃ§Ã£o)
+- [LicenÃ§a](#licenÃ§a)
 
 ## O que o projeto entrega
 
-- Análise local de imagem com detector de placas, normalização geométrica, preprocessamento, OCR e validação.
-- Validação inteligente opcional via Ollama, usada apenas como desempate depois do ranking top-k.
-- Análise local de vídeo com agregação entre frames, ranking de placas e saída anotada.
-- Comparação lado a lado entre o pipeline local e o Plate Recognizer.
-- Captura opcional de artefatos para casos inválidos ou de baixa confiança.
-- Infraestrutura de fixtures, baseline e calibração para validação regressiva.
+- AnÃ¡lise local de imagem com detector de placas, normalizaÃ§Ã£o geomÃ©trica, preprocessamento, OCR e validaÃ§Ã£o.
+- ValidaÃ§Ã£o inteligente opcional via Ollama, usada apenas como desempate depois do ranking top-k.
+- AnÃ¡lise local de vÃ­deo com agregaÃ§Ã£o entre frames, ranking de placas e saÃ­da anotada.
+- ComparaÃ§Ã£o lado a lado entre o pipeline local e o Plate Recognizer.
+- Captura opcional de artefatos para casos invÃ¡lidos ou de baixa confianÃ§a.
+- Infraestrutura de fixtures, baseline e calibraÃ§Ã£o para validaÃ§Ã£o regressiva.
 
-## Limites práticos
+## Limites prÃ¡ticos
 
-O projeto melhora a chance de leitura com detector, normalização, preprocessamento, OCR, validação e agregação temporal, mas ele continua dependente da qualidade real da imagem ou do vídeo. Em outras palavras: o projeto não faz milagre.
+O projeto melhora a chance de leitura com detector, normalizaÃ§Ã£o, preprocessamento, OCR, validaÃ§Ã£o e agregaÃ§Ã£o temporal, mas ele continua dependente da qualidade real da imagem ou do vÃ­deo. Em outras palavras: o projeto nÃ£o faz milagre.
 
-Se a entrada vier ruim demais, o resultado pode não existir, pode ficar abaixo do threshold esperado ou pode terminar apenas como candidato fraco. O comportamento correto nesses cenários não é inventar uma placa com confiança artificial.
+Se a entrada vier ruim demais, o resultado pode nÃ£o existir, pode ficar abaixo do threshold esperado ou pode terminar apenas como candidato fraco. O comportamento correto nesses cenÃ¡rios nÃ£o Ã© inventar uma placa com confianÃ§a artificial.
 
 Isso vale principalmente para casos como:
 
 - placa muito pequena no quadro
-- poucos pixels úteis na região da placa, mesmo quando a detecção acontece
+- poucos pixels Ãºteis na regiÃ£o da placa, mesmo quando a detecÃ§Ã£o acontece
 - desfoque por movimento
-- foco ruim, lente suja ou vibração da câmera
-- baixa iluminação, contraluz ou excesso de brilho
-- compressão forte, ruído, chuva ou reflexos
+- foco ruim, lente suja ou vibraÃ§Ã£o da cÃ¢mera
+- baixa iluminaÃ§Ã£o, contraluz ou excesso de brilho
+- compressÃ£o forte, ruÃ­do, chuva ou reflexos
 - zoom digital agressivo, frame muito comprimido ou bitrate baixo
-- obstrução parcial, sujeira, para-choque cobrindo caracteres ou ângulo extremo
-- placa amassada, tipografia degradada ou caracteres fisicamente ilegíveis
+- obstruÃ§Ã£o parcial, sujeira, para-choque cobrindo caracteres ou Ã¢ngulo extremo
+- placa amassada, tipografia degradada ou caracteres fisicamente ilegÃ­veis
 
-Na prática, quando falta informação visual suficiente, nenhum ajuste de preprocessamento, SAHI, top-k, Ollama ou comparação com fluxo Premium consegue recuperar detalhes que não existem no arquivo de entrada.
+Na prÃ¡tica, quando falta informaÃ§Ã£o visual suficiente, nenhum ajuste de preprocessamento, SAHI, top-k, Ollama ou comparaÃ§Ã£o com fluxo Premium consegue recuperar detalhes que nÃ£o existem no arquivo de entrada.
 
 O que normalmente acontece nesses casos:
 
-- o detector pode não encontrar placa alguma
+- o detector pode nÃ£o encontrar placa alguma
 - o OCR pode ler apenas parte dos caracteres
 - o validador pode rejeitar a leitura por formato inconsistente
-- o pipeline pode manter várias alternativas próximas sem confiança para desempate
-- o resultado final pode ser vazio, inválido ou abaixo do threshold configurado
+- o pipeline pode manter vÃ¡rias alternativas prÃ³ximas sem confianÃ§a para desempate
+- o resultado final pode ser vazio, invÃ¡lido ou abaixo do threshold configurado
 
-Em vídeo, a agregação entre frames ajuda quando existem alguns quadros aproveitáveis. Ela não recupera detalhe que nunca apareceu de forma legível em nenhum frame. Se o vídeo inteiro estiver ruim, muito comprimido, tremido ou distante, o comportamento esperado é não haver leitura confiável.
+Em vÃ­deo, a agregaÃ§Ã£o entre frames ajuda quando existem alguns quadros aproveitÃ¡veis. Ela nÃ£o recupera detalhe que nunca apareceu de forma legÃ­vel em nenhum frame. Se o vÃ­deo inteiro estiver ruim, muito comprimido, tremido ou distante, o comportamento esperado Ã© nÃ£o haver leitura confiÃ¡vel.
 
-Regra prática: para o sistema funcionar bem, a placa precisa aparecer com tamanho razoável, contraste suficiente e pelo menos alguns frames ou imagens realmente legíveis. Quando isso não acontece, a saída mais honesta do sistema é baixa confiança ou ausência de leitura.
+Regra prÃ¡tica: para o sistema funcionar bem, a placa precisa aparecer com tamanho razoÃ¡vel, contraste suficiente e pelo menos alguns frames ou imagens realmente legÃ­veis. Quando isso nÃ£o acontece, a saÃ­da mais honesta do sistema Ã© baixa confianÃ§a ou ausÃªncia de leitura.
 
-Se a meta operacional for aumentar acerto no mundo real, o maior ganho quase sempre vem da captura, não do pós-processamento:
+Se a meta operacional for aumentar acerto no mundo real, o maior ganho quase sempre vem da captura, nÃ£o do pÃ³s-processamento:
 
-- aproximar mais a câmera ou usar enquadramento em que a placa ocupe mais pixels
-- reduzir blur com shutter melhor, estabilização ou menor velocidade relativa
-- melhorar iluminação e evitar reflexo direto
-- preservar bitrate e resolução em vídeo, evitando compressão excessiva
+- aproximar mais a cÃ¢mera ou usar enquadramento em que a placa ocupe mais pixels
+- reduzir blur com shutter melhor, estabilizaÃ§Ã£o ou menor velocidade relativa
+- melhorar iluminaÃ§Ã£o e evitar reflexo direto
+- preservar bitrate e resoluÃ§Ã£o em vÃ­deo, evitando compressÃ£o excessiva
 - selecionar imagens e frames em que a placa esteja frontal ou pouco inclinada
 
-## Fluxos da aplicação
+## Fluxos da aplicaÃ§Ã£o
 
 ### Fluxo local
 
-O fluxo local é orquestrado por `src/v2/pipeline.py` e segue esta ordem:
+O fluxo local Ã© orquestrado por `src/v2/pipeline.py` e segue esta ordem:
 
 1. detectar placas na imagem completa
 2. recortar os crops detectados
@@ -108,50 +106,50 @@ O fluxo local é orquestrado por `src/v2/pipeline.py` e segue esta ordem:
 6. validar o texto lido
 7. rankear alternativas quando a leitura ainda estiver fraca
 8. opcionalmente consultar o Ollama para desempate inteligente quando ainda houver ambiguidade suficiente
-9. salvar artefatos diagnósticos, se habilitado
+9. salvar artefatos diagnÃ³sticos, se habilitado
 
 ### Fluxo Premium
 
 O fluxo Premium usa `src/premium_alpr.py` e envia a imagem completa para a API da Plate Recognizer.
 
-Ele serve para comparação e investigação, não para substituir automaticamente a leitura local.
+Ele serve para comparaÃ§Ã£o e investigaÃ§Ã£o, nÃ£o para substituir automaticamente a leitura local.
 
 ## Detector
 
 O detector local fica em `src/detector.py` e usa YOLOv11 treinado para placas.
 
-Na prática, ele faz o seguinte:
+Na prÃ¡tica, ele faz o seguinte:
 
-- garante que a imagem tenha 3 canais BGR antes da inferência
-- roda uma primeira inferência na imagem inteira
-- se `enable_sahi: true`, pode tentar uma segunda passada com SAHI em imagens grandes quando não há detecções, quando a confiança padrão está baixa ou quando a maior detecção ainda parece pequena demais no quadro
+- garante que a imagem tenha 3 canais BGR antes da inferÃªncia
+- roda uma primeira inferÃªncia na imagem inteira
+- se `enable_sahi: true`, pode tentar uma segunda passada com SAHI em imagens grandes quando nÃ£o hÃ¡ detecÃ§Ãµes, quando a confianÃ§a padrÃ£o estÃ¡ baixa ou quando a maior detecÃ§Ã£o ainda parece pequena demais no quadro
 - aplica margem adaptativa no recorte da placa
-- faz upscale automático em crops muito pequenos para melhorar o OCR
+- faz upscale automÃ¡tico em crops muito pequenos para melhorar o OCR
 
-### O que é SAHI
+### O que Ã© SAHI
 
 SAHI significa `Sliced Aided Hyper Inference`.
 
-Em vez de rodar o detector só na imagem inteira, a imagem é dividida em blocos sobrepostos. O YOLO é executado em cada bloco, e as detecções repetidas nas regiões de sobreposição são unificadas depois por NMS.
+Em vez de rodar o detector sÃ³ na imagem inteira, a imagem Ã© dividida em blocos sobrepostos. O YOLO Ã© executado em cada bloco, e as detecÃ§Ãµes repetidas nas regiÃµes de sobreposiÃ§Ã£o sÃ£o unificadas depois por NMS.
 
-No ALPR 2.0, o SAHI não roda o tempo todo. Ele entra como segunda tentativa quando:
+No ALPR 2.0, o SAHI nÃ£o roda o tempo todo. Ele entra como segunda tentativa quando:
 
-- `models.detector.enable_sahi` está ligado
-- a imagem é grande o suficiente para justificar slicing
-- a detecção padrão não encontrou nenhuma placa
-- a melhor detecção da passada padrão ficou abaixo do limiar configurado de confiança
-- a maior detecção ainda ocupa área muito pequena no quadro, sugerindo placa distante
+- `models.detector.enable_sahi` estÃ¡ ligado
+- a imagem Ã© grande o suficiente para justificar slicing
+- a detecÃ§Ã£o padrÃ£o nÃ£o encontrou nenhuma placa
+- a melhor detecÃ§Ã£o da passada padrÃ£o ficou abaixo do limiar configurado de confianÃ§a
+- a maior detecÃ§Ã£o ainda ocupa Ã¡rea muito pequena no quadro, sugerindo placa distante
 
-Quando a passada SAHI encontra algo útil, o pipeline combina as detecções padrão e as sliced com NMS para evitar duplicatas.
+Quando a passada SAHI encontra algo Ãºtil, o pipeline combina as detecÃ§Ãµes padrÃ£o e as sliced com NMS para evitar duplicatas.
 
 Isso ajuda principalmente em:
 
 - placas pequenas
 - placas distantes
-- imagens de câmera de vigilância ou rodovia
+- imagens de cÃ¢mera de vigilÃ¢ncia ou rodovia
 - cenas em que a placa ocupa poucos pixels no quadro
 
-Configurações relevantes em `config.yaml`:
+ConfiguraÃ§Ãµes relevantes em `config.yaml`:
 
 - `models.detector.enable_sahi`
 - `models.detector.sahi_slice_size`
@@ -161,135 +159,143 @@ Configurações relevantes em `config.yaml`:
 - `models.detector.sahi_retry_large_image_threshold`
 - `models.detector.sahi_merge_iou_threshold`
 
-## Normalização geométrica
+## NormalizaÃ§Ã£o geomÃ©trica
 
-A normalização fica em `src/geometric_normalizer.py`.
+A normalizaÃ§Ã£o fica em `src/geometric_normalizer.py`.
 
 Ela entra entre o detector e o OCR e tenta transformar o crop da placa em uma imagem mais retificada.
 
-O módulo sabe fazer:
+O mÃ³dulo sabe fazer:
 
-- detecção aproximada dos 4 cantos da placa
-- transformação de perspectiva
-- correção de rotação
-- equalização de contraste
+- detecÃ§Ã£o aproximada dos 4 cantos da placa
+- transformaÃ§Ã£o de perspectiva
+- correÃ§Ã£o de rotaÃ§Ã£o
+- equalizaÃ§Ã£o de contraste
 - redimensionamento padronizado
 
-No pipeline v2 atual, o normalizador é instanciado com:
+No pipeline v2 atual, o normalizador Ã© instanciado com:
 
-- correção de perspectiva ativa
-- correção de rotação ativa
+- correÃ§Ã£o de perspectiva ativa
+- correÃ§Ã£o de rotaÃ§Ã£o ativa
 - redimensionamento padronizado ativo
-- equalização de contraste desativada
+- equalizaÃ§Ã£o de contraste desativada
 
-A equalização de contraste foi deixada para o preprocessador, para não duplicar etapas de contraste no mesmo crop.
+A equalizaÃ§Ã£o de contraste foi deixada para o preprocessador, para nÃ£o duplicar etapas de contraste no mesmo crop.
 
 ## Preprocessamento
 
 O preprocessamento fica em `src/preprocessor.py`.
 
-Ele trabalha sobre o crop já normalizado e pode gerar várias versões da mesma placa para aumentar a chance do OCR acertar em cenários difíceis.
+Ele trabalha sobre o crop jÃ¡ normalizado e pode gerar vÃ¡rias versÃµes da mesma placa para aumentar a chance do OCR acertar em cenÃ¡rios difÃ­ceis.
 
 O que o preprocessador faz:
 
-- converte para grayscale quando necessário
-- faz upscale quando a placa está muito pequena para OCR
+- converte para grayscale quando necessÃ¡rio
+- faz upscale quando a placa estÃ¡ muito pequena para OCR
 - aplica CLAHE adaptativo para melhorar contraste
-- remove ruído com `fastNlMeansDenoising` ou bilateral, com reforço extra quando o SNR está baixo
+- remove ruÃ­do com `fastNlMeansDenoising` ou bilateral, com reforÃ§o extra quando o SNR estÃ¡ baixo
 - aplica nitidez via unsharp mask
-- aplica um passo extra de reforço quando o crop indica motion blur alto
-- gera threshold adaptativo gaussiano como binarização principal
-- quando habilitado, gera variantes extras com Otsu, Mean e versões invertidas e não invertidas
-- aplica otimizações específicas para placas brasileiras, incluindo tentativas para Mercosul e formato antigo
-- gera pequenas rotações e ajustes de gamma quando o modo adaptativo entende que a imagem precisa disso
+- aplica um passo extra de reforÃ§o quando o crop indica motion blur alto
+- gera threshold adaptativo gaussiano como binarizaÃ§Ã£o principal
+- quando habilitado, gera variantes extras com Otsu, Mean e versÃµes invertidas e nÃ£o invertidas
+- aplica otimizaÃ§Ãµes especÃ­ficas para placas brasileiras, incluindo tentativas para Mercosul e formato antigo
+- gera pequenas rotaÃ§Ãµes e ajustes de gamma quando o modo adaptativo entende que a imagem precisa disso
 
-O preprocessador também ajusta sua agressividade pela qualidade estimada do crop:
+O preprocessador tambÃ©m ajusta sua agressividade pela qualidade estimada do crop:
 
 - imagem excelente: menos variantes, sem augmentation
-- imagem suficiente: fluxo padrão
-- imagem crítica: fluxo padrão com augmentation
+- imagem suficiente: fluxo padrÃ£o
+- imagem crÃ­tica: fluxo padrÃ£o com augmentation
 - imagem insuficiente: sharpen mais forte e mais tentativas
 
-Esse ajuste não depende apenas do score global. O preprocessor também reage a sinais objetivos como `snr` baixo e `motion_blur` alto para aumentar denoising, sharpening e número de variantes quando necessário.
+Esse ajuste nÃ£o depende apenas do score global. O preprocessor tambÃ©m reage a sinais objetivos como `snr` baixo e `motion_blur` alto para aumentar denoising, sharpening e nÃºmero de variantes quando necessÃ¡rio.
 
-## O que acontece quando não testamos múltiplas variantes
+## O que acontece quando nÃ£o testamos mÃºltiplas variantes
 
-Esse ponto é importante.
+Esse ponto Ã© importante.
 
 No projeto, `ocr.try_multiple_variants` controla duas coisas ao mesmo tempo:
 
-- o preprocessador deixa de gerar o bloco extra de múltiplas binarizações
+- o preprocessador deixa de gerar o bloco extra de mÃºltiplas binarizaÃ§Ãµes
 - o `OCRManager` deixa de iterar sobre `preprocessed_variants`
 
-Na prática, quando `ocr.try_multiple_variants: false`, o OCR roda apenas sobre a imagem normalizada principal. As saídas extras do preprocessamento deixam de participar da decisão do OCR.
+Na prÃ¡tica, quando `ocr.try_multiple_variants: false`, o OCR roda apenas sobre a imagem normalizada principal. As saÃ­das extras do preprocessamento deixam de participar da decisÃ£o do OCR.
 
 Ou seja:
 
-- com `true`: o OCR pode testar várias versões da placa e escolher a melhor
-- com `false`: o OCR fica mais rápido e mais determinístico, mas abre mão das tentativas extras
+- com `true`: o OCR pode testar vÃ¡rias versÃµes da placa e escolher a melhor
+- com `false`: o OCR fica mais rÃ¡pido e mais determinÃ­stico, mas abre mÃ£o das tentativas extras
 
-Configurações relevantes:
+ConfiguraÃ§Ãµes relevantes:
 
 - `ocr.try_multiple_variants`
 - `ocr.max_variants`
 
-## OCR e validação
+## OCR e validaÃ§Ã£o
 
 O OCR local usa `PaddleOCR` via `src/ocr/paddle_engine.py`, encapsulado pelo `OCRManager` em `src/ocr/manager.py`.
 
-Ele continua sendo o OCR principal do projeto. Mesmo com a opção de Ollama disponível, a leitura primária é local, clássica e determinística.
+Ele continua sendo o OCR principal do projeto. Mesmo com a opÃ§Ã£o de Ollama disponÃ­vel, a leitura primÃ¡ria Ã© local, clÃ¡ssica e determinÃ­stica.
 
 Depois da leitura, o texto passa por:
 
 - limpeza do texto bruto
-- reconstruções de confiança por caractere
-- validação de formato em `src/validator.py`
-- ranking de alternativas no pipeline quando a leitura ainda está abaixo do threshold esperado
+- reconstruÃ§Ãµes de confianÃ§a por caractere
+- validaÃ§Ã£o de formato em `src/validator.py`
+- ranking de alternativas no pipeline quando a leitura ainda estÃ¡ abaixo do threshold esperado
 
-O projeto trabalha com thresholds diferentes para OCR e fallback, e esses limiares podem ser flexibilizados por contexto, como baixa iluminação e placa pequena.
+O validador trata o formato Mercosul (LLLNLNN) corretamente: a letra da 5Âª
+posiÃ§Ã£o pode ser qualquer letra A-Z, incluindo vogais (a conversÃ£o do formato
+antigo gera, por exemplo, `0->A`, `4->E`, `8->I`).
 
-### Correção de orientação do texto
+A confianÃ§a por caractere usa consenso posicional entre as variantes de OCR:
+posiÃ§Ãµes em que as leituras divergem recebem confianÃ§a menor, sinalizando com
+mais precisÃ£o qual caractere estÃ¡ incerto.
 
-O PaddleOCR pode rodar com correção de orientação de texto quando `ocr.paddle.use_angle_cls: true`.
+O projeto trabalha com thresholds diferentes para OCR e fallback, e esses limiares podem ser flexibilizados por contexto, como baixa iluminaÃ§Ã£o e placa pequena.
 
-Na prática, isso habilita uma classificação de orientação da linha de texto antes do reconhecimento. Essa etapa ajuda quando o crop chega ao OCR com a linha da placa girada ou invertida o suficiente para atrapalhar a leitura.
+### CorreÃ§Ã£o de orientaÃ§Ã£o do texto
 
-Esse recurso é complementar ao normalizador geométrico:
+O PaddleOCR pode rodar com correÃ§Ã£o de orientaÃ§Ã£o de texto quando `ocr.paddle.use_angle_cls: true`.
 
-- a normalização geométrica corrige perspectiva e rotação do crop da placa
-- a correção de orientação do texto atua no nível da linha de texto dentro do OCR
+Na prÃ¡tica, isso habilita uma classificaÃ§Ã£o de orientaÃ§Ã£o da linha de texto antes do reconhecimento. Essa etapa ajuda quando o crop chega ao OCR com a linha da placa girada ou invertida o suficiente para atrapalhar a leitura.
 
-Ela não substitui a retificação da placa. O caminho esperado continua sendo: primeiro normalizar o crop, depois deixar o OCR refinar a orientação do texto se necessário.
+Esse recurso Ã© complementar ao normalizador geomÃ©trico:
 
-Na maioria dos casos de placas BR, vale manter ligado. Se você quiser reduzir custo e maximizar previsibilidade em entradas já muito bem normalizadas, pode desligar.
+- a normalizaÃ§Ã£o geomÃ©trica corrige perspectiva e rotaÃ§Ã£o do crop da placa
+- a correÃ§Ã£o de orientaÃ§Ã£o do texto atua no nÃ­vel da linha de texto dentro do OCR
 
-Configuração relevante:
+Ela nÃ£o substitui a retificaÃ§Ã£o da placa. O caminho esperado continua sendo: primeiro normalizar o crop, depois deixar o OCR refinar a orientaÃ§Ã£o do texto se necessÃ¡rio.
+
+Na maioria dos casos de placas BR, vale manter ligado. Se vocÃª quiser reduzir custo e maximizar previsibilidade em entradas jÃ¡ muito bem normalizadas, pode desligar.
+
+ConfiguraÃ§Ã£o relevante:
 
 - `ocr.paddle.use_angle_cls`
 
-### Validação inteligente opcional via Ollama
+### ValidaÃ§Ã£o inteligente opcional via Ollama
 
-O projeto também pode usar Ollama para uma validação inteligente opcional, mas ele não entra como OCR principal.
+O projeto tambÃ©m pode usar Ollama para uma validaÃ§Ã£o inteligente opcional, mas ele nÃ£o entra como OCR principal.
 
-O comportamento correto é este:
+O comportamento correto Ã© este:
 
 - o PaddleOCR faz a leitura principal
-- o validador local e o ranking determinístico geram os candidatos top-k
-- só depois disso o Ollama pode ser consultado como desempate, se estiver habilitado
+- o validador local e o ranking determinÃ­stico geram os candidatos top-k
+- sÃ³ depois disso o Ollama pode ser consultado como desempate, se estiver habilitado
 
-Ou seja, o Ollama não substitui o OCR local e não roda antes do top-k.
+Ou seja, o Ollama nÃ£o substitui o OCR local e nÃ£o roda antes do top-k.
 
 Pontos importantes:
 
-- é desabilitado por padrão
+- Ã© desabilitado por padrÃ£o
 - roda localmente via endpoint do Ollama, sem depender de API externa
-- só usa candidatos que o pipeline já produziu; ele não deve inventar uma placa nova
-- pode abstenção quando a ambiguidade continua alta
-- o override final só acontece se a confiança mínima configurada for atendida
+- sÃ³ usa candidatos que o pipeline jÃ¡ produziu; ele nÃ£o deve inventar uma placa nova
+- pode abstenÃ§Ã£o quando a ambiguidade continua alta
+- o override final sÃ³ acontece se a confianÃ§a mÃ­nima configurada for atendida
 
-Se o Ollama estiver desligado, sem modelo instalado ou indisponível, o pipeline continua funcionando com o caminho determinístico normal.
+Se o Ollama estiver desligado, sem modelo instalado ou indisponÃ­vel, o pipeline continua funcionando com o caminho determinÃ­stico normal.
 
-Configurações relevantes:
+ConfiguraÃ§Ãµes relevantes:
 
 - `llm_validation.enabled`
 - `llm_validation.base_url`
@@ -298,76 +304,76 @@ Configurações relevantes:
 - `llm_validation.ambiguity_gap_threshold`
 - `llm_validation.min_decision_confidence`
 
-## Vídeo
+## VÃ­deo
 
-O processamento de vídeo fica em `src/video_processor.py`.
+O processamento de vÃ­deo fica em `src/video_processor.py`.
 
-O módulo:
+O mÃ³dulo:
 
-- abre o vídeo
+- abre o vÃ­deo
 - processa 1 a cada `N` frames conforme `skip_frames`
 - usa modo `moving` ou `stationary`
 - consolida placas entre frames
-- gera ranking das leituras mais prováveis
-- opcionalmente salva um vídeo anotado
+- gera ranking das leituras mais provÃ¡veis
+- opcionalmente salva um vÃ­deo anotado
 
-### Modos de vídeo
+### Modos de vÃ­deo
 
 - `moving`: processa mais frames e prioriza capturar a placa em momentos diferentes
-- `stationary`: processa menos frames, aplica filtro de nitidez e pode fazer early-stop quando a leitura estabiliza com alta confiança
+- `stationary`: processa menos frames, aplica filtro de nitidez e pode fazer early-stop quando a leitura estabiliza com alta confianÃ§a
 
-### Gerar vídeo anotado
+### Gerar vÃ­deo anotado
 
-Quando `video.generate_output_video: true`, o processador cria um vídeo de saída em `data/results/` com o mesmo FPS e a mesma resolução do arquivo original.
+Quando `video.generate_output_video: true`, o processador cria um vÃ­deo de saÃ­da em `data/results/` com o mesmo FPS e a mesma resoluÃ§Ã£o do arquivo original.
 
-As anotações incluem:
+As anotaÃ§Ãµes incluem:
 
 - bounding box da placa
 - texto lido
-- confiança da leitura
-- cor da anotação de acordo com a confiança
+- confianÃ§a da leitura
+- cor da anotaÃ§Ã£o de acordo com a confianÃ§a
 
 Detalhes importantes do comportamento atual:
 
-- frames processados recebem a anotação daquele frame
-- frames pulados reutilizam a última anotação conhecida, para o vídeo não ficar "piscando"
-- se o modo `stationary` atingir early-stop, os frames restantes podem continuar sendo gravados com a última anotação consolidada
+- frames processados recebem a anotaÃ§Ã£o daquele frame
+- frames pulados reutilizam a Ãºltima anotaÃ§Ã£o conhecida, para o vÃ­deo nÃ£o ficar "piscando"
+- se o modo `stationary` atingir early-stop, os frames restantes podem continuar sendo gravados com a Ãºltima anotaÃ§Ã£o consolidada
 
-O nome do arquivo de saída segue o padrão:
+O nome do arquivo de saÃ­da segue o padrÃ£o:
 
 `<nome_original>_alpr_<timestamp>.<ext>`
 
-## Votação temporal
+## VotaÃ§Ã£o temporal
 
-A votação temporal usa `src/temporal_voting.py` e é integrada por `src/video_processor.py`.
+A votaÃ§Ã£o temporal usa `src/temporal_voting.py` e Ã© integrada por `src/video_processor.py`.
 
-O objetivo é simples: a mesma placa aparece em vários frames, mas cada frame pode errar um caractere diferente. A votação junta essas leituras para produzir uma versão mais confiável.
+O objetivo Ã© simples: a mesma placa aparece em vÃ¡rios frames, mas cada frame pode errar um caractere diferente. A votaÃ§Ã£o junta essas leituras para produzir uma versÃ£o mais confiÃ¡vel.
 
 O motor temporal faz o seguinte:
 
-- associa leituras da mesma placa ao longo do vídeo usando IoU de bbox e similaridade de texto
+- associa leituras da mesma placa ao longo do vÃ­deo usando IoU de bbox e similaridade de texto
 - cria `tracks` por placa
-- aplica uma estratégia de consolidação quando há observações suficientes
+- aplica uma estratÃ©gia de consolidaÃ§Ã£o quando hÃ¡ observaÃ§Ãµes suficientes
 
-Estratégias disponíveis:
+EstratÃ©gias disponÃ­veis:
 
 - `positional`: vota caractere por caractere
 - `majority`: vota pela placa completa mais frequente
 - `hybrid`: combina as duas abordagens
 
-No release atual, o modo padrão é `hybrid`.
+No release atual, o modo padrÃ£o Ã© `hybrid`.
 
-Depois da votação, o `VideoProcessor` ainda calcula um ranking composto das placas usando:
+Depois da votaÃ§Ã£o, o `VideoProcessor` ainda calcula um ranking composto das placas usando:
 
-- número de detecções
-- melhor confiança individual
-- confiança média
-- qualidade média
-- confirmação por caractere
-- extensão temporal da track
-- bônus para leituras votadas
+- nÃºmero de detecÃ§Ãµes
+- melhor confianÃ§a individual
+- confianÃ§a mÃ©dia
+- qualidade mÃ©dia
+- confirmaÃ§Ã£o por caractere
+- extensÃ£o temporal da track
+- bÃ´nus para leituras votadas
 
-Configurações relevantes:
+ConfiguraÃ§Ãµes relevantes:
 
 - `temporal_voting.enabled`
 - `temporal_voting.strategy`
@@ -375,18 +381,39 @@ Configurações relevantes:
 
 ## Fluxo Premium
 
-O fluxo Premium usa Plate Recognizer apenas quando o usuário clica no botão dedicado da interface.
+O fluxo Premium usa Plate Recognizer apenas quando o usuÃ¡rio clica no botÃ£o dedicado da interface.
 
 Pontos importantes:
 
-- ele envia a imagem completa, não o crop da placa
+- ele envia a imagem completa, nÃ£o o crop da placa
 - ele roda separado do fluxo local
-- ele não substitui automaticamente a leitura local
+- ele nÃ£o substitui automaticamente a leitura local
 - a chave deve ficar no `.env`, via `PLATE_RECOGNIZER_API_KEY`
 
-Detalhes de configuração e recomendações de threshold estão em `PLATE_RECOGNIZER_API.md`.
+Detalhes de configuraÃ§Ã£o e recomendaÃ§Ãµes de threshold estÃ£o em `PLATE_RECOGNIZER_API.md`.
 
-## Configuração importante
+## Atributos do veÃ­culo (opcional)
+
+AlÃ©m da placa, o projeto pode estimar atributos do veÃ­culo quando
+`vehicle_attributes.enabled: true`. O foco principal continua sendo a placa;
+esse mÃ³dulo Ã© complementar e desligado por padrÃ£o.
+
+- Cor dominante: calculada offline por anÃ¡lise HSV da regiÃ£o do veÃ­culo
+  (estimada ao redor da placa). Funciona sem pesos externos.
+- Marca e modelo: exigem um classificador treinado. O mÃ³dulo expÃµe uma interface
+  injetÃ¡vel (`MakeModelClassifier`); sem um classificador configurado, marca e
+  modelo retornam vazios em vez de inventar um resultado.
+
+O resultado Ã© anexado a cada leitura em `vehicle_attributes` (cor, confianÃ§a da
+cor, marca, modelo, bounding box estimada do veÃ­culo e origem).
+
+ConfiguraÃ§Ãµes relevantes:
+
+- `vehicle_attributes.enabled`
+- `vehicle_attributes.roi_width_scale`
+- `vehicle_attributes.roi_height_scale`
+
+## ConfiguraÃ§Ã£o importante
 
 Campos que mais mudam o comportamento do sistema:
 
@@ -394,47 +421,49 @@ Campos que mais mudam o comportamento do sistema:
 - `models.detector.enable_sahi`: habilita sliced inference em segunda tentativa
 - `ocr.try_multiple_variants`: liga ou desliga as variantes de OCR
 - `ocr.max_variants`: limita quantas variantes entram no OCR
-- `ocr.paddle.use_angle_cls`: habilita a correção de orientação da linha de texto no PaddleOCR
-- `pipeline.ocr_confidence_threshold`: limiar mínimo esperado do OCR local
+- `ocr.paddle.use_angle_cls`: habilita a correÃ§Ã£o de orientaÃ§Ã£o da linha de texto no PaddleOCR
+- `ocr.paddle.add_quiet_zone`: adiciona uma borda branca ao redor do crop antes do OCR para estabilizar a detecÃ§Ã£o da linha em placas muito recortadas (padrÃ£o desligado)
+- `vehicle_attributes.enabled`: liga o reconhecimento opcional de atributos do veÃ­culo (cor offline; marca/modelo sÃ³ com classificador injetÃ¡vel)
+- `pipeline.ocr_confidence_threshold`: limiar mÃ­nimo esperado do OCR local
 - `pipeline.fallback_confidence_threshold`: abaixo disso, o pipeline tenta rankear alternativas
 - `llm_validation.enabled`: liga ou desliga o desempate opcional via Ollama
-- `llm_validation.model`: define o modelo Ollama quando você não quer usar a seleção automática
+- `llm_validation.model`: define o modelo Ollama quando vocÃª nÃ£o quer usar a seleÃ§Ã£o automÃ¡tica
 - `llm_validation.ambiguity_gap_threshold`: define quando a ambiguidade top-2 justifica consultar o LLM
-- `llm_validation.min_decision_confidence`: confiança mínima exigida para aceitar override do LLM
-- `premium_api.min_confidence`: limiar mínimo para aceitar a leitura Premium
-- `video.skip_frames`: controla amostragem no vídeo
-- `video.generate_output_video`: salva ou não o vídeo anotado
-- `temporal_voting.enabled`: liga ou desliga consolidação temporal
+- `llm_validation.min_decision_confidence`: confianÃ§a mÃ­nima exigida para aceitar override do LLM
+- `premium_api.min_confidence`: limiar mÃ­nimo para aceitar a leitura Premium
+- `video.skip_frames`: controla amostragem no vÃ­deo
+- `video.generate_output_video`: salva ou nÃ£o o vÃ­deo anotado
+- `temporal_voting.enabled`: liga ou desliga consolidaÃ§Ã£o temporal
 
 ## Estrutura do projeto
 
 ```text
 ALPR/
-├── app.py
-├── config.yaml
-├── PLATE_RECOGNIZER_API.md
-├── data/
-│   ├── fixtures/
-│   └── results/
-├── docs/
-│   └── V2_VALIDATION.md
-├── models/
-│   └── yolo/
-├── src/
-│   ├── detector.py
-│   ├── geometric_normalizer.py
-│   ├── premium_alpr.py
-│   ├── preprocessor.py
-│   ├── temporal_voting.py
-│   ├── video_processor.py
-│   ├── ocr/
-│   └── v2/
-└── tests/
+â”œâ”€â”€ app.py
+â”œâ”€â”€ config.yaml
+â”œâ”€â”€ PLATE_RECOGNIZER_API.md
+â”œâ”€â”€ data/
+â”‚   â”œâ”€â”€ fixtures/
+â”‚   â””â”€â”€ results/
+â”œâ”€â”€ docs/
+â”‚   â””â”€â”€ V2_VALIDATION.md
+â”œâ”€â”€ models/
+â”‚   â””â”€â”€ yolo/
+â”œâ”€â”€ src/
+â”‚   â”œâ”€â”€ detector.py
+â”‚   â”œâ”€â”€ geometric_normalizer.py
+â”‚   â”œâ”€â”€ premium_alpr.py
+â”‚   â”œâ”€â”€ preprocessor.py
+â”‚   â”œâ”€â”€ temporal_voting.py
+â”‚   â”œâ”€â”€ video_processor.py
+â”‚   â”œâ”€â”€ ocr/
+â”‚   â””â”€â”€ v2/
+â””â”€â”€ tests/
 ```
 
-## Instalação detalhada
+## InstalaÃ§Ã£o detalhada
 
-Para um clone limpo do repositório público, o ponto principal é este: o projeto não versiona segredos, mídias geradas nem pesos locais grandes. Isso significa que a instalação das bibliotecas só resolve parte do bootstrap.
+Para um clone limpo do repositÃ³rio pÃºblico, o ponto principal Ã© este: o projeto nÃ£o versiona segredos, mÃ­dias geradas nem pesos locais grandes. Isso significa que a instalaÃ§Ã£o das bibliotecas sÃ³ resolve parte do bootstrap.
 
 ```bash
 python -m venv venv
@@ -457,43 +486,43 @@ python install_dependencies.py
 
 ## Bootstrap de um clone limpo
 
-Este repositório não inclui por padrão:
+Este repositÃ³rio nÃ£o inclui por padrÃ£o:
 
 - `.env` com chaves privadas
 - pesos YOLO locais em `models/yolo/`
-- resultados e vídeos gerados em `data/results/`
+- resultados e vÃ­deos gerados em `data/results/`
 
-Depois de instalar as dependências:
+Depois de instalar as dependÃªncias:
 
 1. copie `.env.example` para `.env` apenas se quiser usar o fluxo Premium com Plate Recognizer
 2. baixe pelo menos um peso YOLO de placas e coloque o arquivo `.pt` em `models/yolo/`
-3. use um nome esperado pelo projeto, como `yolo11l-plate.pt`, ou ajuste o modelo selecionado na sidebar e na configuração
+3. use um nome esperado pelo projeto, como `yolo11l-plate.pt`, ou ajuste o modelo selecionado na sidebar e na configuraÃ§Ã£o
 
-Sem um arquivo `.pt` válido em `models/yolo/`, o fluxo local não inicializa corretamente porque o detector precisa de um peso real fora do repositório.
+Sem um arquivo `.pt` vÃ¡lido em `models/yolo/`, o fluxo local nÃ£o inicializa corretamente porque o detector precisa de um peso real fora do repositÃ³rio.
 
 O que continua opcional mesmo em um clone limpo:
 
-- `PLATE_RECOGNIZER_API_KEY` no `.env` para comparação Premium
+- `PLATE_RECOGNIZER_API_KEY` no `.env` para comparaÃ§Ã£o Premium
 - Ollama local, usado apenas como desempate depois do top-k
 
-## Execução
+## ExecuÃ§Ã£o
 
 ```bash
 streamlit run app.py
 ```
 
-## Baseline, fixtures e calibração
+## Baseline, fixtures e calibraÃ§Ã£o
 
-O projeto inclui infraestrutura de avaliação offline em `data/fixtures/` e `src/v2/evaluation.py` para:
+O projeto inclui infraestrutura de avaliaÃ§Ã£o offline em `data/fixtures/` e `src/v2/evaluation.py` para:
 
 - carregar fixtures rotulados
-- gerar relatórios de baseline
-- comparar mudanças entre versões
+- gerar relatÃ³rios de baseline
+- comparar mudanÃ§as entre versÃµes
 - calibrar thresholds de detector, OCR e fallback
 
-## Validação
+## ValidaÃ§Ã£o
 
-Na validação mais recente do workspace, a suíte automatizada passou com `350 passed`.
+Na validaÃ§Ã£o mais recente do workspace, a suÃ­te automatizada passou com `384 passed`.
 
 Para rodar os testes:
 
@@ -501,8 +530,8 @@ Para rodar os testes:
 python -m pytest tests -q
 ```
 
-Para o que ainda depende de mídia real e validação manual, consulte `docs/V2_VALIDATION.md`.
+Para o que ainda depende de mÃ­dia real e validaÃ§Ã£o manual, consulte `docs/V2_VALIDATION.md`.
 
-## Licença
+## LicenÃ§a
 
-O código deste projeto é distribuído sob a licença MIT. Veja o arquivo `LICENSE`.
+O cÃ³digo deste projeto Ã© distribuÃ­do sob a licenÃ§a MIT. Veja o arquivo `LICENSE`.

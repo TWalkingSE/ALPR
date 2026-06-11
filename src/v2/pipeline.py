@@ -26,6 +26,7 @@ from src.v2.models import LocalPlateResult, normalize_plate_text
 from src.v2.ollama_validation import OllamaSmartValidator
 from src.v2.quality import QualityAssessor
 from src.v2.reporting import ReportBuilder
+from src.v2.vehicle_attributes import VehicleAttributeAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,15 @@ class LocalAnalysisPipeline:
             output_dir=config.reports.output_dir,
             prefer_artifact_dir=config.reports.prefer_artifact_dir,
         )
+        self.vehicle_analyzer = (
+            VehicleAttributeAnalyzer(
+                enabled=True,
+                roi_width_scale=config.vehicle_attributes.roi_width_scale,
+                roi_height_scale=config.vehicle_attributes.roi_height_scale,
+            )
+            if config.vehicle_attributes.enabled
+            else None
+        )
 
     @classmethod
     def from_settings(
@@ -151,6 +161,8 @@ class LocalAnalysisPipeline:
             det_limit_side_len=config.ocr.det_limit_side_len,
             rec_batch_num=config.ocr.rec_batch_num,
             min_score=config.ocr.min_score,
+            add_quiet_zone=config.ocr.add_quiet_zone,
+            quiet_zone_ratio=config.ocr.quiet_zone_ratio,
         )
         if not paddle_engine.is_available:
             detail = getattr(paddle_engine, 'init_error', None) or 'PaddleOCR indisponivel'
@@ -212,6 +224,7 @@ class LocalAnalysisPipeline:
                 temporal_prior=temporal_prior,
                 image_bytes=image_bytes,
                 input_file_path=input_file_path,
+                full_image=image,
             )
             if result is not None:
                 results.append(result)
@@ -249,6 +262,7 @@ class LocalAnalysisPipeline:
         temporal_prior: Optional[Dict[str, float]] = None,
         image_bytes: Optional[bytes] = None,
         input_file_path: Optional[str] = None,
+        full_image: Optional[np.ndarray] = None,
     ) -> Optional[LocalPlateResult]:
         start_total = time.perf_counter()
         step_times: Dict[str, float] = {}
@@ -283,10 +297,12 @@ class LocalAnalysisPipeline:
             variants = [normalized]
 
         step_start = time.perf_counter()
+        ocr_variant_pool = self._prioritize_ocr_variants(variants[1:])
+        variant_budget = max(0, context_profile.effective_max_variants - 1)
         ocr_results = self.ocr_engine.recognize(
             image=normalized,
             original_image=normalized,
-            preprocessed_variants=variants[1:context_profile.effective_max_variants],
+            preprocessed_variants=ocr_variant_pool[:variant_budget],
             visual_format_hint=None,
         )
         step_times['ocr'] = (time.perf_counter() - step_start) * 1000
@@ -319,6 +335,15 @@ class LocalAnalysisPipeline:
             raw_char_confidences,
             confidence,
         )
+
+        vehicle_attributes: Dict[str, Any] = {}
+        if self.vehicle_analyzer is not None:
+            step_start = time.perf_counter()
+            vehicle_attributes = self.vehicle_analyzer.analyze(
+                full_image,
+                bbox,
+            ).to_dict()
+            step_times['vehicle_attributes'] = (time.perf_counter() - step_start) * 1000
 
         alternatives: List[Dict[str, Any]] = []
         if (not is_valid) or confidence < context_profile.effective_fallback_threshold:
@@ -422,6 +447,7 @@ class LocalAnalysisPipeline:
             quality_assessment=quality_assessment.to_dict() if quality_assessment is not None else {},
             validation_details=validation_details,
             llm_validation=llm_validation,
+            vehicle_attributes=vehicle_attributes,
             detector_metadata=dict(region.get('detector_metadata', {})),
         )
 
@@ -451,6 +477,39 @@ class LocalAnalysisPipeline:
 
         result.processing_time_ms = (time.perf_counter() - start_total) * 1000
         return result
+
+    @staticmethod
+    def _prioritize_ocr_variants(variants: List[np.ndarray]) -> List[np.ndarray]:
+        """
+        Reordena as variantes de preprocessamento para favorecer o PaddleOCR.
+
+        O modelo de reconhecimento do PaddleOCR é treinado em imagens naturais
+        em tons de cinza, e binarizações duras (Otsu/threshold adaptativo)
+        tendem a degradar a leitura. Quando o orçamento de variantes é limitado,
+        priorizamos as variantes não-binarizadas (grayscale/contraste), deixando
+        as binarizadas como secundárias — sem descartá-las.
+
+        A ordem relativa dentro de cada grupo é preservada (ordenação estável).
+        """
+        non_binary: List[np.ndarray] = []
+        binary: List[np.ndarray] = []
+        for variant in variants:
+            if variant is None or getattr(variant, 'size', 0) == 0:
+                continue
+            if LocalAnalysisPipeline._is_binary_image(variant):
+                binary.append(variant)
+            else:
+                non_binary.append(variant)
+        return non_binary + binary
+
+    @staticmethod
+    def _is_binary_image(image: np.ndarray) -> bool:
+        """Heurística: imagem grayscale com poucos níveis distintos é binária."""
+        if image is None or getattr(image, 'ndim', 0) != 2:
+            return False
+        # Amostragem barata: imagens binarizadas têm <= 4 valores distintos.
+        unique_values = np.unique(image)
+        return unique_values.size <= 4
 
     def _resolve_detector_confidence(
         self,
@@ -766,7 +825,7 @@ class LocalAnalysisPipeline:
 
         score += 0.20 * is_plausible_plate_prefix(clean)
 
-        if self.validator.is_mercosul_format(clean) and len(clean) > 4 and clean[4] not in 'AEIOU':
+        if self.validator.is_mercosul_format(clean):
             score += 0.10
 
         return min(1.0, score)
@@ -1051,6 +1110,7 @@ class LocalAnalysisPipeline:
             'quality_assessment': result.quality_assessment,
             'validation_details': result.validation_details,
             'llm_validation': result.llm_validation,
+            'vehicle_attributes': result.vehicle_attributes,
             'forensic_analysis': result.forensic_analysis,
             'detector_metadata': result.detector_metadata,
             'alternative_plates': result.alternative_plates,
@@ -1113,4 +1173,5 @@ class LocalAnalysisPipeline:
             else '',
             'forensic_review_enabled': self.forensic_analyzer is not None,
             'reporting_enabled': self.report_builder.enabled,
+            'vehicle_attributes_enabled': self.vehicle_analyzer is not None,
         }

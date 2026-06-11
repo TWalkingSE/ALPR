@@ -40,6 +40,8 @@ class OCRConfig:
     det_limit_side_len: int = 960
     rec_batch_num: int = 6
     min_score: float = 0.3
+    add_quiet_zone: bool = False
+    quiet_zone_ratio: float = 0.12
 
 
 @dataclass
@@ -136,6 +138,13 @@ class ReportConfig:
 
 
 @dataclass
+class VehicleAttributesConfig:
+    enabled: bool = False
+    roi_width_scale: float = 3.0
+    roi_height_scale: float = 5.0
+
+
+@dataclass
 class LLMValidationConfig:
     enabled: bool = False
     base_url: str = 'http://127.0.0.1:11434'
@@ -173,6 +182,7 @@ class AppConfig:
     forensic: ForensicConfig = field(default_factory=ForensicConfig)
     reports: ReportConfig = field(default_factory=ReportConfig)
     llm_validation: LLMValidationConfig = field(default_factory=LLMValidationConfig)
+    vehicle_attributes: VehicleAttributesConfig = field(default_factory=VehicleAttributesConfig)
 
     def signature(self) -> tuple:
         """Return a stable signature for caching/rebuild decisions."""
@@ -202,6 +212,8 @@ class AppConfig:
             self.ocr.det_limit_side_len,
             self.ocr.rec_batch_num,
             round(self.ocr.min_score, 4),
+            self.ocr.add_quiet_zone,
+            round(self.ocr.quiet_zone_ratio, 4),
             self.premium.enabled,
             self.premium.provider,
             tuple(self.premium.regions),
@@ -260,6 +272,9 @@ class AppConfig:
             self.llm_validation.allow_override,
             round(self.llm_validation.ambiguity_gap_threshold, 4),
             round(self.llm_validation.min_decision_confidence, 4),
+            self.vehicle_attributes.enabled,
+            round(self.vehicle_attributes.roi_width_scale, 4),
+            round(self.vehicle_attributes.roi_height_scale, 4),
         )
 
 
@@ -284,6 +299,7 @@ def build_v2_config(raw_config: Dict[str, Any]) -> AppConfig:
     forensic_cfg = raw_config.get('forensic', {})
     reports_cfg = raw_config.get('reports', {})
     llm_cfg = raw_config.get('llm_validation', {})
+    vehicle_cfg = raw_config.get('vehicle_attributes', {})
 
     requested_engine = str(ocr_cfg.get('engine', 'paddle')).lower()
     engine = 'paddle' if requested_engine != 'paddle' else requested_engine
@@ -317,6 +333,8 @@ def build_v2_config(raw_config: Dict[str, Any]) -> AppConfig:
         det_limit_side_len=int(paddle_cfg.get('det_limit_side_len', 960)),
         rec_batch_num=int(paddle_cfg.get('rec_batch_num', 6)),
         min_score=float(paddle_cfg.get('min_score', 0.3)),
+        add_quiet_zone=bool(paddle_cfg.get('add_quiet_zone', False)),
+        quiet_zone_ratio=float(paddle_cfg.get('quiet_zone_ratio', 0.12)),
     )
 
     premium = PremiumConfig(
@@ -473,6 +491,12 @@ def build_v2_config(raw_config: Dict[str, Any]) -> AppConfig:
         min_decision_confidence=float(llm_cfg.get('min_decision_confidence', 0.70)),
     )
 
+    vehicle_attributes = VehicleAttributesConfig(
+        enabled=bool(vehicle_cfg.get('enabled', False)),
+        roi_width_scale=float(vehicle_cfg.get('roi_width_scale', 3.0)),
+        roi_height_scale=float(vehicle_cfg.get('roi_height_scale', 5.0)),
+    )
+
     return AppConfig(
         detector=detector,
         ocr=ocr,
@@ -486,4 +510,5 @@ def build_v2_config(raw_config: Dict[str, Any]) -> AppConfig:
         forensic=forensic,
         reports=reports,
         llm_validation=llm_validation,
+        vehicle_attributes=vehicle_attributes,
     )

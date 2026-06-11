@@ -28,6 +28,10 @@ ocr:
     det_limit_side_len: 960
     rec_batch_num: 6
     min_score: 0.3
+    # Zona de silêncio: adiciona borda branca ao redor do crop antes do OCR
+    # para estabilizar a detecção da linha de texto em placas muito recortadas.
+    add_quiet_zone: false
+    quiet_zone_ratio: 0.12
 
 premium_api:
   enabled: false
@@ -121,3 +125,13 @@ llm_validation:
   allow_override: true
   ambiguity_gap_threshold: 0.12
   min_decision_confidence: 0.70
+
+# Reconhecimento opcional de atributos do veiculo (cor, marca, modelo).
+# - Desabilitado por padrao (foco do projeto continua sendo a placa).
+# - A cor dominante e calculada offline via analise HSV.
+# - Marca/modelo exigem um classificador treinado injetavel; sem ele, retornam
+#   vazio em vez de inventar um resultado.
+vehicle_attributes:
+  enabled: false
+  roi_width_scale: 3.0
+  roi_height_scale: 5.0

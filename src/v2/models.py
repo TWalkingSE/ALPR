@@ -35,6 +35,7 @@ class LocalPlateResult:
     quality_assessment: Dict[str, Any] = field(default_factory=dict)
     validation_details: Dict[str, Any] = field(default_factory=dict)
     llm_validation: Dict[str, Any] = field(default_factory=dict)
+    vehicle_attributes: Dict[str, Any] = field(default_factory=dict)
     forensic_analysis: Dict[str, Any] = field(default_factory=dict)
     detector_metadata: Dict[str, Any] = field(default_factory=dict)
     artifact_dir: str = ''

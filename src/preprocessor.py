@@ -307,8 +307,8 @@ class ImagePreprocessor:
                         logger.debug(f"Erro na binarização Mean: {e}")
 
                     # ====== VARIANTES NÃO-INVERTIDAS (texto escuro em fundo claro) ======
-                    # Engines OCR (GLM / OLMoOCR2 e a maioria dos OCRs em geral)
-                    # esperam texto escuro sobre fundo claro. Binarização BINARY
+                    # A maioria dos OCRs, incluindo o PaddleOCR, é treinada com
+                    # texto escuro sobre fundo claro. Binarização BINARY
                     # (não invertida) garante compatibilidade universal.
                     try:
                         pre_thresh = processed_images[-4] if len(processed_images) >= 4 else gray

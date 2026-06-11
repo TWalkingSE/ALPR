@@ -3,18 +3,18 @@
 OCRManager — orquestrador simplificado para a nova arquitetura.
 
 Rationale:
-- Apenas UM engine OCR ativo por vez (selecionado pelo usuário via UI/config).
-- GLM OCR é o primário padrão; OLMoOCR2 é alternativa selecionável.
+- Apenas UM engine OCR ativo por vez. No ALPR 2.0 o engine é o PaddleOCR
+  (determinístico, offline), encapsulado por este manager.
 - Não há paralelismo entre engines. Não há voting/merge entre engines diferentes.
 - Fallback automático apenas em caso de falha catastrófica (timeout/vazio) do
   engine selecionado, se `auto_fallback_on_failure=True`.
 
 Mantém as features do pipeline:
 - Multi-variant: roda o engine em várias versões preprocessadas da mesma placa
-  e escolhe a de melhor confiança (_run_ocr_on_variants + _apply_voting).
+  e escolhe a de melhor confiança (_run_on_variants + _best_result).
 - visual_format_hint: propaga a dica visual (Mercosul vs old) via argumento.
-- char_confidences: engines Ollama não fornecem, mas o pipeline reconstrói no
-  LPRPipeline._build_char_confidences.
+- char_confidences: o PaddleOCR expõe confiança por caractere; o pipeline ainda
+  pode normalizá-la em LocalAnalysisPipeline._build_char_confidences.
 """
 
 import logging
@@ -33,7 +33,7 @@ class OCRManager:
     Orquestra um único engine OCR ativo, com fallback on-failure opcional.
 
     Args:
-        engine: Instância do engine primário (GLMOCREngine ou OLMoOCREngine).
+        engine: Instância do engine primário (tipicamente PaddleOCREngine).
         fallback_factory: Callable que instancia o engine de fallback sob
             demanda (evita carregar dois modelos em VRAM à toa).
         auto_fallback_on_failure: Se True e o engine primário retornar vazio
@@ -98,6 +98,12 @@ class OCRManager:
         if results:
             best = self._best_result(results)
             if best:
+                # Enriquecer char_confidences com consenso posicional entre as
+                # variantes: posições em que as leituras divergem recebem
+                # confiança menor — sinal real de incerteza por caractere.
+                consensus = self._consensus_char_confidences(results, best)
+                if consensus:
+                    best['char_confidences'] = consensus
                 return [best]
 
         # Fallback com imagem original, se fornecida
@@ -165,6 +171,70 @@ class OCRManager:
         if not results:
             return None
         return max(results, key=lambda r: r.get('confidence', 0.0))
+
+    @staticmethod
+    def _consensus_char_confidences(
+        results: List[OCRResult],
+        best: OCRResult,
+    ) -> List[tuple]:
+        """
+        Calcula confiança por caractere via consenso posicional entre variantes.
+
+        Para cada posição do texto escolhido (`best`), mede quanto as demais
+        leituras (de mesmo comprimento) concordam com aquele caractere,
+        ponderando pela confiança de cada variante. Posições onde as variantes
+        divergem ficam com confiança menor — exatamente o sinal de "qual
+        caractere está incerto" que o pipeline precisa.
+
+        Returns:
+            Lista [(char, confidence)] alinhada ao texto de `best`, ou [] quando
+            não há variantes suficientes para inferir consenso.
+        """
+        best_text = str(best.get('text', ''))
+        if not best_text:
+            return []
+
+        base_confidence = float(best.get('confidence', 0.0))
+        length = len(best_text)
+
+        # Considerar apenas leituras com o mesmo comprimento do texto escolhido.
+        aligned = [
+            (str(r.get('text', '')), float(r.get('confidence', 0.0)))
+            for r in results
+            if len(str(r.get('text', ''))) == length
+        ]
+
+        # Sem variantes adicionais para comparar: não há consenso a calcular.
+        if len(aligned) < 2:
+            return []
+
+        char_confidences: List[tuple] = []
+        for position in range(length):
+            target_char = best_text[position]
+            agreeing_weight = 0.0
+            agreeing_confidences: List[float] = []
+            total_weight = 0.0
+            for text, confidence in aligned:
+                weight = max(confidence, 1e-6)
+                total_weight += weight
+                if text[position] == target_char:
+                    agreeing_weight += weight
+                    agreeing_confidences.append(confidence)
+
+            if total_weight <= 0.0:
+                char_confidences.append((target_char, base_confidence))
+                continue
+
+            agreement = agreeing_weight / total_weight
+            mean_agree_conf = (
+                sum(agreeing_confidences) / len(agreeing_confidences)
+                if agreeing_confidences
+                else base_confidence
+            )
+            position_confidence = max(0.0, min(1.0, agreement * mean_agree_conf))
+            char_confidences.append((target_char, position_confidence))
+
+        return char_confidences
 
     def get_status(self) -> dict:
         """Retorna status para exibição na UI."""

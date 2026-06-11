@@ -155,9 +155,13 @@ class TestCheckPlateValidity:
         assert "Placa vazia" in result["errors"]
 
     def test_mercosul_vowel_in_position_5(self, validator):
-        # Posição index 4 com vogal — deve ser inválida por regra Mercosul
-        result = validator.check_plate_validity("ABC1A23")
-        assert result["is_valid"] is False
+        # Placas Mercosul brasileiras (LLLNLNN) aceitam QUALQUER letra na 5ª
+        # posição, incluindo vogais (ex.: conversão 0->A, 4->E, 8->I).
+        for plate in ("ABC1A23", "ABC1E23", "ABC1I23", "ABC1O23", "ABC1U23"):
+            result = validator.check_plate_validity(plate)
+            assert result["is_valid"] is True, f"{plate} deveria ser válida"
+            assert result["format"] == "mercosul"
+            assert result["normalized_plate"] == plate
 
     def test_mercosul_consonant_in_position_5(self, validator):
         result = validator.check_plate_validity("ABC1D23")

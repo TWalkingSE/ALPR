@@ -176,19 +176,14 @@ class PlateNgramModel:
 
         # Posição 4: depende do formato
         # Para old format: dígito
-        # Para Mercosul: consoante (excluir vogais)
+        # Para Mercosul: qualquer letra A-Z (vogais são válidas)
         # Usar distribuição mista (ponderada 60% Mercosul, 40% old)
         pos4_dist = {}
 
-        # Consoantes (Mercosul)
-        consonants = set('BCDFGHJKLMNPQRSTVWXYZ')
-        total_consonants = len(consonants)
-
+        # Letras (Mercosul) — todas as 26 letras são válidas, sem exclusão de vogais
+        total_letters = 26
         for ch in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
-            if ch in consonants:
-                pos4_dist[ch] = 0.6 / total_consonants
-            else:
-                pos4_dist[ch] = 0.001  # Vogais muito improváveis
+            pos4_dist[ch] = 0.6 / total_letters
 
         for d in range(10):
             pos4_dist[str(d)] = 0.4 / 10  # Dígitos (old format)
@@ -252,10 +247,8 @@ class PlateNgramModel:
         if re.match(r'^[A-Z]{3}[0-9]{4}$', clean):
             normalized = min(1.0, normalized + 0.05)
         elif re.match(r'^[A-Z]{3}[0-9][A-Z][0-9]{2}$', clean):
-            if clean[4] not in 'AEIOU':
-                normalized = min(1.0, normalized + 0.07)  # Mercosul ligeiramente preferido
-            else:
-                normalized -= 0.05  # Vogal na posição 4 penaliza
+            # Mercosul: qualquer letra na 5ª posição é válida (vogais incluídas)
+            normalized = min(1.0, normalized + 0.07)  # Mercosul ligeiramente preferido
 
         return normalized
 

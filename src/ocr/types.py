@@ -11,6 +11,11 @@ class OCRResult(TypedDict, total=False):
     engine: str
     char_confidences: list[OCRCharConfidence]
     merge_sources: list[str]
+    # Confiança de leitura "crua" do engine (sem ajuste de formato) e score de
+    # aderência ao formato BR, expostos separadamente para desacoplar leitura
+    # de plausibilidade de formato.
+    native_confidence: float
+    format_score: float
     used_fallback: bool
     used_original: bool
     variant_idx: int
@@ -22,7 +27,7 @@ class OCRResult(TypedDict, total=False):
     avg_confidence: float
     engines_voted: list[str]
     # Auditoria de self-consistency: amostras brutas quando N>1 chamadas foram
-    # feitas pelo engine (GLM/OLMoOCR2) para medir concordância.
+    # feitas por um engine não-determinístico (com temperatura > 0).
     self_consistency_samples: list[str]
 
 
