@@ -39,6 +39,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# API HTTP opcional (scripts/api.py). Não é dependência base: o app Streamlit
+# e os CLIs funcionam sem ela.
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",

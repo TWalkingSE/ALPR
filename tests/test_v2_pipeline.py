@@ -24,8 +24,8 @@ class _FakeNormalizer:
 
 
 class _FakePreprocessor:
-    def process(self, image, quality_result=None):
-        del quality_result
+    def process(self, image, quality_result=None, max_variants=None):
+        del quality_result, max_variants
         return [image]
 
 
@@ -127,6 +127,9 @@ def test_local_pipeline_generates_structured_report(tmp_path):
     assert len(results) == 1
     assert results[0].report_path
     assert results[0].report_payload['source']['sha256']
+    # O payload copia o tempo no instante em que é gerado: medir só depois
+    # faria todo laudo sair com timing zerado.
+    assert results[0].report_payload['timing']['processing_time_ms'] > 0.0
     assert results[0].report_payload['recognition']['plate_text'] == 'ABC1D23'
 
 

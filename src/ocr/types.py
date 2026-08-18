@@ -10,7 +10,6 @@ class OCRResult(TypedDict, total=False):
     bbox: OCRBBox
     engine: str
     char_confidences: list[OCRCharConfidence]
-    merge_sources: list[str]
     # Confiança de leitura "crua" do engine (sem ajuste de formato) e score de
     # aderência ao formato BR, expostos separadamente para desacoplar leitura
     # de plausibilidade de formato.
@@ -19,16 +18,6 @@ class OCRResult(TypedDict, total=False):
     used_fallback: bool
     used_original: bool
     variant_idx: int
-    ngram_score: float
-    region: str
-    vehicle_type: str
-    substituted_pos4: str
-    votes: int
-    avg_confidence: float
-    engines_voted: list[str]
-    # Auditoria de self-consistency: amostras brutas quando N>1 chamadas foram
-    # feitas por um engine não-determinístico (com temperatura > 0).
-    self_consistency_samples: list[str]
 
 
 def normalize_ocr_text(text: str) -> str:

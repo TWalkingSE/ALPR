@@ -35,7 +35,7 @@ def test_app_main_renders_release_entrypoint_without_uploads(monkeypatch):
     monkeypatch.setattr(app, '_render_video_outputs', render_video)
     monkeypatch.setattr(app.st, 'title', lambda *args, **kwargs: None)
     monkeypatch.setattr(app.st, 'caption', lambda *args, **kwargs: None)
-    monkeypatch.setattr(app.st, 'tabs', lambda labels: (_TabContext(), _TabContext()))
+    monkeypatch.setattr(app.st, 'tabs', lambda labels: tuple(_TabContext() for _ in labels))
     monkeypatch.setattr(app.st, 'file_uploader', file_uploader)
 
     app.main()

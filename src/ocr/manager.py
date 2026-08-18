@@ -50,12 +50,14 @@ class OCRManager:
         auto_fallback_on_failure: bool = True,
         try_multiple_variants: bool = True,
         max_variants: int = 5,
+        max_candidates: int = 5,
     ):
         self.engine = engine
         self.fallback_factory = fallback_factory
         self.auto_fallback_on_failure = auto_fallback_on_failure
         self.try_multiple_variants = try_multiple_variants
         self.max_variants = max_variants
+        self.max_candidates = max(1, max_candidates)
         self._visual_format_hint: Optional[str] = None
         # Mantido como propriedade para compatibilidade com código existente
         # (ex: pipeline.get_pipeline_info)
@@ -79,7 +81,16 @@ class OCRManager:
             visual_format_hint: 'mercosul' | 'old' | None — passado adiante.
 
         Returns:
-            Lista com o melhor resultado OCR (tipicamente 1 item).
+            Lista começando pelo melhor resultado, seguida das leituras
+            DISTINTAS produzidas pelas demais variantes (ordenadas por
+            confiança, no máximo `max_candidates`).
+
+            Devolver só o melhor descartaria a informação mais útil que o
+            multi-variante produz: quando duas binarizações leem textos
+            diferentes, essa divergência é justamente o material que o ranking
+            top-k do pipeline consome para decidir. Com um único item,
+            `_build_alternatives` degenera (o score de consenso perde gradação
+            e só sobram os candidatos sintetizados pelo validador).
         """
         if not self.engine:
             logger.error("Nenhum engine OCR configurado")
@@ -104,7 +115,7 @@ class OCRManager:
                 consensus = self._consensus_char_confidences(results, best)
                 if consensus:
                     best['char_confidences'] = consensus
-                return [best]
+                return self._collect_candidates(results, best)
 
         # Fallback com imagem original, se fornecida
         if not results and original_image is not None:
@@ -171,6 +182,36 @@ class OCRManager:
         if not results:
             return None
         return max(results, key=lambda r: r.get('confidence', 0.0))
+
+    def _collect_candidates(
+        self,
+        results: List[OCRResult],
+        best: OCRResult,
+    ) -> List[OCRResult]:
+        """Monta [best, ...leituras distintas] a partir de todas as variantes.
+
+        Mantém, para cada texto distinto, apenas a ocorrência de maior
+        confiança. O primeiro item é sempre `best` (já enriquecido com o
+        consenso por caractere), preservando o contrato de que
+        `resultado[0]` é a leitura escolhida.
+        """
+        best_text = str(best.get('text', ''))
+
+        strongest_by_text: dict[str, OCRResult] = {}
+        for result in results:
+            text = str(result.get('text', ''))
+            if not text or text == best_text:
+                continue
+            current = strongest_by_text.get(text)
+            if current is None or result.get('confidence', 0.0) > current.get('confidence', 0.0):
+                strongest_by_text[text] = result
+
+        alternatives = sorted(
+            strongest_by_text.values(),
+            key=lambda item: item.get('confidence', 0.0),
+            reverse=True,
+        )
+        return [best, *alternatives[: self.max_candidates - 1]]
 
     @staticmethod
     def _consensus_char_confidences(
@@ -244,7 +285,8 @@ class OCRManager:
             'auto_fallback_on_failure': self.auto_fallback_on_failure,
             'fallback_configured': self.fallback_factory is not None,
             'total_engines': 1,
-            # Aliases para retrocompatibilidade com display_pipeline_info
+            # Aliases mantidos para consumidores externos do status (a UI atual
+            # lê apenas ocr_engines_count via LocalAnalysisPipeline.get_pipeline_info).
             'primary_engines': [self.engine.__class__.__name__] if self.engine else [],
             'fallback_engines': (
                 ['<lazy>'] if self.fallback_factory else []

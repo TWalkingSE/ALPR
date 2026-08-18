@@ -7,6 +7,7 @@ from src.v2.ui.display import (
 	display_summary_table,
 	display_video_results,
 )
+from src.v2.ui.history import render_history_tab
 from src.v2.ui.sidebar import render_sidebar
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
 	'display_premium_api_comparison',
 	'display_summary_table',
 	'display_video_results',
+	'render_history_tab',
 	'render_sidebar',
 ]

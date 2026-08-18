@@ -26,15 +26,13 @@ from typing import Any, List, Optional
 import cv2
 import numpy as np
 
+from src.constants import RE_MERCOSUL as _RE_MERCOSUL
+from src.constants import RE_OLD as _RE_OLD
 from src.ocr.base import OCREngine
 from src.ocr.confidence import format_aderence_confidence
 from src.ocr.types import OCRResult, create_ocr_result
 
 logger = logging.getLogger(__name__)
-
-
-_RE_OLD = re.compile(r'^[A-Z]{3}[0-9]{4}$')
-_RE_MERCOSUL = re.compile(r'^[A-Z]{3}[0-9][A-Z][0-9]{2}$')
 
 # Tokens de cabeçalho/decoração que aparecem em placas brasileiras e NÃO fazem
 # parte da identificação alfanumérica (ex.: "BRASIL", "MERCOSUL", país e UF).

@@ -12,38 +12,6 @@ from src.v2.models import LocalPlateResult
 
 
 @runtime_checkable
-class Detector(Protocol):
-    """Contract for plate detectors used by the v2 pipeline."""
-
-    is_loaded: bool
-
-    def detect(self, image: np.ndarray, confidence: Optional[float] = None) -> list[dict[str, Any]]:
-        ...
-
-    def extract_plate_regions(
-        self,
-        image: np.ndarray,
-        detections: Sequence[dict[str, Any]],
-        add_margin: float = 0.0,
-    ) -> list[dict[str, Any]]:
-        ...
-
-
-@runtime_checkable
-class OCREngine(Protocol):
-    """Contract for OCR engines/managers used by the v2 pipeline."""
-
-    def recognize(
-        self,
-        image: np.ndarray,
-        original_image: np.ndarray,
-        preprocessed_variants: Sequence[np.ndarray] | None = None,
-        visual_format_hint: Optional[str] = None,
-    ) -> list[dict[str, Any]]:
-        ...
-
-
-@runtime_checkable
 class LocalAnalysisProvider(Protocol):
     """Contract for the local ALPR provider used by the app layer."""
 

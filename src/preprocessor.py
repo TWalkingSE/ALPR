@@ -46,7 +46,11 @@ class ImagePreprocessor:
             adaptive_threshold: Se deve aplicar threshold adaptativo
             optimize_for_brazilian_plates: Se deve otimizar para placas brasileiras (Mercosul/antigas)
             morphological_cleanup: Se deve limpar com operações morfológicas após binarização
-            deskew: Se deve corrigir inclinação da placa via Hough Lines
+            deskew: INERTE. A correção de inclinação migrou para
+                ``GeometricNormalizer``, que roda ANTES deste preprocessador no
+                pipeline. A flag e o método ``_deskew_image`` permanecem apenas
+                para compatibilidade de assinatura e cobertura de testes;
+                alterá-la não muda o resultado de ``process()``.
             multi_binarization: Se deve gerar múltiplas binarizações (Otsu + Adaptativo)
             adaptive_clahe: Se deve adaptar parâmetros CLAHE ao histograma
             use_nlmeans_denoising: Se deve usar fastNlMeansDenoising ao invés de bilateral
@@ -71,7 +75,34 @@ class ImagePreprocessor:
                     f"morphological_cleanup={morphological_cleanup}, deskew={deskew}, "
                     f"multi_binarization={multi_binarization}, adaptive_clahe={adaptive_clahe}")
 
-    def process(self, image: np.ndarray, quality_result: Optional[Any] = None) -> List[np.ndarray]:
+    def _planned_non_binary_count(self, enable_augmentation: bool, motion_blur_high: bool) -> int:
+        """Quantas variantes NÃO-binarizadas este preprocessamento vai produzir.
+
+        Usado para decidir se vale a pena gerar as binarizações: o pipeline
+        prioriza as não-binarizadas (ver
+        ``LocalAnalysisPipeline._prioritize_ocr_variants``) e corta pelo
+        orçamento, então quando o orçamento cabe todo nas não-binarizadas as
+        binarizações são calculadas e descartadas.
+        """
+        count = 0
+        if self.enhance_contrast:
+            count += 1
+        if self.remove_noise:
+            count += 1
+        if self.sharpen:
+            count += 1
+            if motion_blur_high:
+                count += 1
+        if enable_augmentation:
+            count += 4  # 2 rotações + 2 correções de gamma
+        return count
+
+    def process(
+        self,
+        image: np.ndarray,
+        quality_result: Optional[Any] = None,
+        max_variants: Optional[int] = None,
+    ) -> List[np.ndarray]:
         """
         Aplica pré-processamento à imagem.
         Retorna uma lista de imagens processadas, sendo a última geralmente a mais otimizada para OCR.
@@ -85,6 +116,12 @@ class ImagePreprocessor:
                   - Suficiente (>= 0.50): fluxo padrão (todas as binarizações)
                   - Crítica (>= 0.25): fluxo padrão + augmentation agressivo
                   - Insuficiente (< 0.25): fluxo agressivo máximo (sharpen forte + todas as variantes)
+            max_variants: Quantas variantes (além da original) o chamador vai
+                efetivamente consumir. Quando informado e menor ou igual ao
+                número de variantes não-binarizadas, as binarizações são
+                puladas — o consumidor as prioriza por último e nunca chegaria
+                a usá-las. Sem este parâmetro o comportamento é o histórico
+                (gera tudo).
 
         Returns:
             Lista com versões processadas da imagem (a primeira é a original)
@@ -139,6 +176,17 @@ class ImagePreprocessor:
                 f"Preprocessor adaptativo: modo={adaptive_mode} (score={score:.2f}), "
                 f"multi_bin={enable_multi_bin}, augmentation={enable_augmentation}"
             )
+        # Pular as binarizações quando o orçamento do chamador já é coberto
+        # pelas variantes não-binarizadas, que têm prioridade no consumo.
+        # Economiza 5 binarizações + 2 otimizações de placa por recorte, em
+        # toda imagem e todo frame de vídeo, sem alterar o conjunto entregue.
+        skip_binarizations = False
+        if max_variants is not None:
+            planned_non_binary = self._planned_non_binary_count(
+                enable_augmentation, motion_blur_high
+            )
+            skip_binarizations = int(max_variants) <= planned_non_binary
+
         self._adaptive_mode = adaptive_mode
         self._enable_multi_bin_runtime = enable_multi_bin
         self._enable_augmentation_runtime = enable_augmentation
@@ -249,7 +297,7 @@ class ImagePreprocessor:
                     logger.debug("Kernel extra aplicado para compensar motion blur.")
 
             # 5. Aplicar thresholding (geração de múltiplas binarizações)
-            if self.adaptive_threshold:
+            if self.adaptive_threshold and not skip_binarizations:
                 # blockSize adaptativo: blocos grandes (11) em imagens pequenas
                 # fazem caracteres fundirem ou fragmentarem
                 input_h = getattr(self, '_input_height', h)
@@ -346,7 +394,9 @@ class ImagePreprocessor:
 
             # Otimizações específicas para placas brasileiras (se habilitado)
             # Estas podem gerar imagens alternativas
-            if self.optimize_for_brazilian_plates and len(original.shape) == 3:
+            # As otimizações abaixo também produzem imagens binarizadas, então
+            # seguem o mesmo corte de orçamento.
+            if self.optimize_for_brazilian_plates and not skip_binarizations and len(original.shape) == 3:
                 try:
                     mercosul_optimized = self._optimize_for_mercosul(original)
                     if mercosul_optimized is not None:

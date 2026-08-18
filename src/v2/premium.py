@@ -32,6 +32,21 @@ class PremiumAnalysisService:
             )
         return cls(client=client, settings=settings)
 
+    def apply_runtime_config(self, settings: PremiumConfig) -> None:
+        """Atualiza os ajustes que não trocam a identidade do cliente.
+
+        `enabled`, `provider` e a presença da chave definem se existe cliente e
+        qual é (ver `AppConfig.signature`); limiar, regiões e timeout podem ser
+        alterados no cliente já construído, sem recriá-lo.
+        """
+        self.settings = settings
+        if self.client is None:
+            return
+        self.client.regions = list(settings.regions) or ['br']
+        self.client.min_confidence = settings.min_confidence
+        self.client.timeout = settings.timeout
+        self.client.log_all_calls = settings.log_all_calls
+
     @property
     def available(self) -> bool:
         return self.client is not None and self.client.available

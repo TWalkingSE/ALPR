@@ -17,10 +17,6 @@ def _engine_label(engine_name: str) -> str:
     key = (engine_name or '').lower()
     if key.startswith('paddle'):
         return 'PaddleOCR'
-    if key.startswith('glm'):
-        return 'GLM OCR'
-    if key.startswith('olmocr'):
-        return 'OLMoOCR2'
     return engine_name or '-'
 
 
@@ -240,6 +236,7 @@ def display_pipeline_info(pipeline) -> None:
         ('Qualidade', 'ON' if info.get('quality_assessment_enabled') else 'OFF'),
         ('Forense', 'ON' if info.get('forensic_review_enabled') else 'OFF'),
         ('Laudos', 'ON' if info.get('reporting_enabled') else 'OFF'),
+        ('Historico', 'ON' if info.get('history_enabled') else 'OFF'),
     ]
     for label, value in status_items:
         st.sidebar.text(f'{label}: {value}')

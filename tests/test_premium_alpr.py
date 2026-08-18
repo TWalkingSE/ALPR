@@ -1,5 +1,6 @@
 """Testes unitários para src/premium_alpr.py — PremiumALPRProvider."""
 
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -151,10 +152,17 @@ class TestAnalyzeFullImage:
         assert result.success is False
 
 
-class TestStructuredLoggingHook:
-    @patch('src.premium_alpr.httpx')
-    def test_logs_to_structured_logger(self, mock_httpx):
-        """Se structured_logger presente, cada chamada é registrada."""
+class TestCallLogging:
+    """Registro das chamadas à API Premium.
+
+    Antes existia um hook `structured_logger` que chamava `._write_event()` —
+    método privado de uma classe `StructuredLogger` que não existe no
+    repositório. O hook era sempre `None` em produção e o teste original apenas
+    verificava o próprio MagicMock. Hoje o registro usa o logger do módulo.
+    """
+
+    @staticmethod
+    def _mock_successful_call(mock_httpx):
         mock_check = MagicMock()
         mock_check.status_code = 200
         mock_check.json.return_value = {'usage': {}}
@@ -173,15 +181,26 @@ class TestStructuredLoggingHook:
         mock_ctx.post.return_value = mock_resp
         mock_httpx.Client.return_value = mock_ctx
 
-        slog = MagicMock()
-        p = PremiumALPRProvider(
-            enabled=True, api_key='x' * 20,
-            structured_logger=slog, log_all_calls=True,
-        )
-        p.analyze_full_image(_dummy_image())
+    @patch('src.premium_alpr.httpx')
+    def test_logs_call_when_enabled(self, mock_httpx, caplog):
+        self._mock_successful_call(mock_httpx)
+        p = PremiumALPRProvider(enabled=True, api_key='x' * 20, log_all_calls=True)
 
-        slog._write_event.assert_called_once()
-        event = slog._write_event.call_args[0][0]
-        assert event['event_type'] == 'premium_api_call'
-        assert event['success'] is True
-        assert event['plate_text'] == 'ABC1234'
+        with caplog.at_level(logging.INFO, logger='src.premium_alpr'):
+            p.analyze_full_image(_dummy_image())
+
+        registros = [r for r in caplog.records if 'Premium API' in r.getMessage()]
+        assert len(registros) == 1
+        mensagem = registros[0].getMessage()
+        assert 'ABC1234' in mensagem
+        assert 'success=True' in mensagem
+
+    @patch('src.premium_alpr.httpx')
+    def test_does_not_log_when_disabled(self, mock_httpx, caplog):
+        self._mock_successful_call(mock_httpx)
+        p = PremiumALPRProvider(enabled=True, api_key='x' * 20, log_all_calls=False)
+
+        with caplog.at_level(logging.INFO, logger='src.premium_alpr'):
+            p.analyze_full_image(_dummy_image())
+
+        assert not [r for r in caplog.records if 'Premium API' in r.getMessage()]

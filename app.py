@@ -46,6 +46,7 @@ from src.v2.ui import (
     display_premium_api_comparison,
     display_summary_table,
     display_video_results,
+    render_history_tab,
     render_sidebar,
 )
 
@@ -103,8 +104,48 @@ def _store_video_result(video_result, session_state=None):
     store_video_result(session, video_result)
 
 
+_VIDEO_PROCESSOR_KEY = 'v2_video_processor'
+_VIDEO_PROCESSOR_SIGNATURE_KEY = 'v2_video_processor_signature'
+
+
+def _video_processor_signature(config) -> tuple:
+    video = config.video
+    vehicle_mode = getattr(video, 'vehicle_mode', None)
+    return (
+        # vehicle_mode é um VehicleMode em produção, mas dublês de teste passam
+        # a string crua — normalizamos os dois casos.
+        getattr(vehicle_mode, 'value', vehicle_mode),
+        getattr(video, 'skip_frames', None),
+        getattr(video, 'max_frames', None),
+        getattr(video, 'generate_output_video', None),
+        getattr(video, 'output_dir', None),
+        getattr(video, 'confidence_threshold', None),
+        getattr(video, 'enable_temporal_voting', None),
+        getattr(video, 'temporal_strategy', None),
+        getattr(video, 'temporal_min_observations', None),
+    )
+
+
 def _build_video_processor(config) -> VideoProcessor:
-    return build_video_processor_impl(config)
+    """Constrói (ou reaproveita) o VideoProcessor da sessão.
+
+    A renderização dos resultados de vídeo roda a cada rerun do Streamlit e só
+    precisa dos formatadores (ranking, timeline, leitura confirmada). Construir
+    um processador novo a cada rerun recria o diretório de saída e reinicializa
+    a votação temporal à toa, então o objeto é cacheado por assinatura da
+    configuração de vídeo.
+    """
+    signature = _video_processor_signature(config)
+    if (
+        st.session_state.get(_VIDEO_PROCESSOR_KEY) is not None
+        and st.session_state.get(_VIDEO_PROCESSOR_SIGNATURE_KEY) == signature
+    ):
+        return st.session_state[_VIDEO_PROCESSOR_KEY]
+
+    processor = build_video_processor_impl(config)
+    st.session_state[_VIDEO_PROCESSOR_KEY] = processor
+    st.session_state[_VIDEO_PROCESSOR_SIGNATURE_KEY] = signature
+    return processor
 
 
 def _render_image_outputs(session_state=None):
@@ -167,7 +208,7 @@ def main():
 
     display_pipeline_info(pipeline)
 
-    image_tab, video_tab = st.tabs(['Imagem', 'Video'])
+    image_tab, video_tab, history_tab = st.tabs(['Imagem', 'Video', 'Historico'])
 
     with image_tab:
         uploaded_image = st.file_uploader(
@@ -252,6 +293,9 @@ def main():
                 status.empty()
 
         _render_video_outputs(config)
+
+    with history_tab:
+        render_history_tab(getattr(pipeline, 'reading_store', None))
 
 
 if __name__ == '__main__':

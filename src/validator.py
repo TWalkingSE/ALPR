@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from .constants import (
+    BRAZILIAN_PREFIX_RANGES,
     MERCOSUL_FORMAT_BIAS,
     OCR_CHAR_MAP,
     PLATE_PATTERN_MERCOSUL,
@@ -24,64 +25,10 @@ from .constants import (
 logger = logging.getLogger(__name__)
 
 
-# Prefixos de placa por estado brasileiro (para ranking de sugestões)
-# Fonte: sistema de registro veicular brasileiro (DENATRAN/SENATRAN)
-BRAZILIAN_STATE_PREFIXES = {
-    # Acre
-    'AC': [('QTA', 'QTZ'), ('NAA', 'NBZ')],
-    # Alagoas
-    'AL': [('QRA', 'QSZ')],
-    # Amapá
-    'AP': [('QOA', 'QPZ')],
-    # Amazonas
-    'AM': [('QLA', 'QNZ')],
-    # Bahia
-    'BA': [('JAA', 'JZZ'), ('NUA', 'NZZ'), ('OAA', 'OAZ'), ('QCA', 'QDZ')],
-    # Ceará
-    'CE': [('HTA', 'HZZ'), ('QFA', 'QHZ')],
-    # Distrito Federal
-    'DF': [('JKA', 'JZZ'), ('OLA', 'OMZ'), ('QGA', 'QGZ')],
-    # Espírito Santo
-    'ES': [('MTA', 'MZZ'), ('PPA', 'PPZ'), ('QBA', 'QBZ')],
-    # Goiás
-    'GO': [('OAA', 'OZZ'), ('QEA', 'QEZ')],
-    # Maranhão
-    'MA': [('HSA', 'HSZ'), ('QIA', 'QIZ')],
-    # Mato Grosso
-    'MT': [('NGA', 'NTZ'), ('QJA', 'QKZ')],
-    # Mato Grosso do Sul
-    'MS': [('HRA', 'HRZ'), ('NCA', 'NFZ'), ('QQA', 'QQZ')],
-    # Minas Gerais
-    'MG': [('GKJ', 'HOK'), ('HAA', 'HQZ'), ('OUA', 'OZZ'), ('QVA', 'QZZ')],
-    # Pará
-    'PA': [('QOA', 'QPZ'), ('NNA', 'NNZ')],
-    # Paraíba
-    'PB': [('QOA', 'QOZ')],
-    # Paraná
-    'PR': [('AAA', 'BEZ'), ('AXA', 'BFZ'), ('QMA', 'QMZ')],
-    # Pernambuco
-    'PE': [('QPA', 'QPZ')],
-    # Piauí
-    'PI': [('QNA', 'QNZ')],
-    # Rio de Janeiro
-    'RJ': [('KMF', 'LVE'), ('LAA', 'LZZ'), ('QQA', 'QSZ')],
-    # Rio Grande do Norte
-    'RN': [('QOA', 'QOZ')],
-    # Rio Grande do Sul
-    'RS': [('IAA', 'JZZ'), ('ICA', 'IJZ'), ('QUA', 'QUZ')],
-    # Rondônia
-    'RO': [('NBA', 'NBZ'), ('QTA', 'QTZ')],
-    # Roraima
-    'RR': [('QOA', 'QOZ')],
-    # Santa Catarina
-    'SC': [('MAA', 'MSZ'), ('QJA', 'QJZ')],
-    # São Paulo
-    'SP': [('BFA', 'GKI'), ('CPA', 'GKZ'), ('QWA', 'QZZ')],
-    # Sergipe
-    'SE': [('QOA', 'QOZ')],
-    # Tocantins
-    'TO': [('QOA', 'QOZ')],
-}
+# Alias mantido para compatibilidade com código externo que importava este nome.
+# A tabela real vive em src/constants.py (fonte única compartilhada com
+# src/plate_patterns.py).
+BRAZILIAN_STATE_PREFIXES = BRAZILIAN_PREFIX_RANGES
 
 
 def is_plausible_plate_prefix(text: str) -> float:
@@ -101,7 +48,7 @@ def is_plausible_plate_prefix(text: str) -> float:
     prefix = text[:3].upper()
 
     # Verificar se o prefixo cai em alguma faixa de estado
-    for _state, ranges in BRAZILIAN_STATE_PREFIXES.items():
+    for _state, ranges in BRAZILIAN_PREFIX_RANGES.items():
         for (start, end) in ranges:
             if start <= prefix <= end:
                 return 1.0  # Prefixo válido de estado
@@ -132,6 +79,13 @@ class PlateValidator:
 
         # Histórico de correções para aprendizado
         self.correction_history: Dict[str, str] = {}
+
+        # Memo de _try_correction. A correção é determinística e cara (brute
+        # force sobre até 4 posições ambíguas), e o pipeline a invoca repetidas
+        # vezes sobre os mesmos textos: describe_validation chama validate() E
+        # check_plate_validity(), e ambos entram em _try_correction; por cima,
+        # _build_alternatives repete isso para cada candidato do top-k.
+        self._correction_cache: Dict[Tuple[str, Optional[str]], Optional[str]] = {}
 
     def clean_text(self, text: str) -> str:
         """
@@ -283,6 +237,16 @@ class PlateValidator:
         if not text:
             return None
 
+        cache_key = (text, format_hint)
+        if cache_key in self._correction_cache:
+            return self._correction_cache[cache_key]
+
+        result = self._try_correction_uncached(text, format_hint)
+        self._correction_cache[cache_key] = result
+        return result
+
+    def _try_correction_uncached(self, text: str, format_hint: Optional[str] = None) -> Optional[str]:
+        """Implementação de `_try_correction` sem memoização."""
         # Verificar se o comprimento está próximo do esperado
         if len(text) >= 6 and len(text) <= 8:
             # Normalizar para 7 caracteres antes de tentar correção
@@ -326,21 +290,6 @@ class PlateValidator:
                     return multi
 
         return None
-
-    def _correct_to_format(self, text: str, format_type: str) -> Optional[str]:
-        """
-        Tenta corrigir cada posição para o tipo esperado pelo formato.
-        Usa SIMILAR_CHARS para encontrar a melhor substituição.
-        
-        Args:
-            text: Texto com 7 caracteres
-            format_type: 'old' ou 'mercosul'
-            
-        Returns:
-            Texto corrigido ou None
-        """
-        result, _ = self._correct_to_format_scored(text, format_type)
-        return result
 
     def _correct_to_format_scored(self, text: str, format_type: str) -> Tuple[Optional[str], float]:
         """
@@ -553,14 +502,6 @@ class PlateValidator:
             return 'A'
         return None
 
-    def _find_best_replacement(self, char: str, expected_type: str) -> Optional[str]:
-        """
-        Encontra a melhor substituição para um caractere usando SIMILAR_CHARS.
-        Wrapper de compatibilidade para _find_best_replacement_weighted.
-        """
-        replacement, _ = self._find_best_replacement_weighted(char, expected_type)
-        return replacement
-
     def _try_multi_substitutions(self, text: str) -> Optional[str]:
         """
         Tenta múltiplas combinações usando SIMILAR_CHARS (multi-alternativa).
@@ -677,7 +618,14 @@ class PlateValidator:
         clean = self.clean_text(plate)
         normalized = re.sub(r'[-\s]', '', clean)
         suggested_plate = self.validate(plate, format_hint=format_hint)
-        validity = self.check_plate_validity(plate, format_hint=format_hint)
+        # Reaproveita `clean`/`normalized` já calculados acima em vez de deixar
+        # check_plate_validity refazer a limpeza (`_try_correction` já é memoizado).
+        validity = (
+            self._check_validity_normalized(plate, clean, normalized, format_hint)
+            if plate
+            else {'is_valid': False, 'format': 'unknown', 'errors': ['Placa vazia'],
+                  'normalized_plate': None}
+        )
         normalized_suggested = re.sub(r'[-\s]', '', suggested_plate or '')
         exact_old = bool(self.re_old.match(normalized) or self.re_old_with_hyphen.match(clean))
         exact_mercosul = bool(self.re_mercosul.match(normalized))
@@ -719,13 +667,38 @@ class PlateValidator:
         """
         Verifica a validade de uma placa, incluindo regras específicas.
         Testa Mercosul ANTES de old format para evitar classificação incorreta.
-        
+
         Args:
             plate: Texto da placa a ser verificada
             format_hint: 'old', 'mercosul' ou None (detecção visual)
-            
+
         Returns:
             Dicionário com informações de validade
+        """
+        if not plate:
+            return {
+                "is_valid": False,
+                "format": "unknown",
+                "errors": ["Placa vazia"],
+                "normalized_plate": None,
+            }
+
+        clean = self.clean_text(plate)
+        normalized = re.sub(r'[-\s]', '', clean)
+        return self._check_validity_normalized(plate, clean, normalized, format_hint)
+
+    def _check_validity_normalized(
+        self,
+        plate: str,
+        clean: str,
+        normalized: str,
+        format_hint: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Núcleo de `check_plate_validity` sobre texto já limpo e normalizado.
+
+        Extraído para que `describe_validation` — que já calculou `clean` e
+        `normalized` para montar o resto do diagnóstico — não pague a limpeza
+        duas vezes por candidato do top-k.
         """
         result = {
             "is_valid": False,
@@ -733,14 +706,6 @@ class PlateValidator:
             "errors": [],
             "normalized_plate": None
         }
-
-        if not plate:
-            result["errors"].append("Placa vazia")
-            return result
-
-        # Limpar o texto
-        clean = self.clean_text(plate)
-        normalized = re.sub(r'[-\s]', '', clean)
 
         # Verificar formato: testar Mercosul PRIMEIRO
         # (evita que placas Mercosul sejam classificadas como antigas)

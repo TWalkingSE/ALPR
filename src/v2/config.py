@@ -138,6 +138,12 @@ class ReportConfig:
 
 
 @dataclass
+class StorageConfig:
+    enabled: bool = False
+    db_path: str = 'data/results/alpr.db'
+
+
+@dataclass
 class VehicleAttributesConfig:
     enabled: bool = False
     roi_width_scale: float = 3.0
@@ -183,98 +189,46 @@ class AppConfig:
     reports: ReportConfig = field(default_factory=ReportConfig)
     llm_validation: LLMValidationConfig = field(default_factory=LLMValidationConfig)
     vehicle_attributes: VehicleAttributesConfig = field(default_factory=VehicleAttributesConfig)
+    storage: StorageConfig = field(default_factory=StorageConfig)
 
     def signature(self) -> tuple:
-        """Return a stable signature for caching/rebuild decisions."""
+        """Assinatura dos campos que exigem RECONSTRUIR os objetos pesados.
+
+        Só entra aqui o que é consumido no *construtor* do detector YOLO, do
+        `PaddleOCREngine` ou do cliente Premium — ou seja, o que não pode ser
+        alterado em um objeto já vivo.
+
+        Tudo o mais (thresholds, artefatos, laudos, vídeo, cenários, LLM,
+        forense, atributos de veículo, e até os parâmetros SAHI, que são apenas
+        atributos lidos a cada `detect()`) é aplicado em tempo de execução por
+        `LocalAnalysisPipeline.apply_runtime_config`.
+
+        Antes desta separação a assinatura tinha ~90 campos e qualquer slider da
+        sidebar — inclusive o limiar de gravação de artefatos, que só decide se
+        um PNG vai para o disco — recarregava o modelo YOLO e reinicializava o
+        PaddleOCR.
+        """
         return (
+            # Identidade do modelo de detecção e dispositivo de inferência.
             self.detector.models_dir,
             self.detector.model_name,
-            round(self.detector.confidence, 4),
             self.detector.device,
             self.detector.use_gpu,
-            self.detector.enable_sahi,
-            self.detector.sahi_slice_size,
-            round(self.detector.sahi_overlap_ratio, 4),
-            round(self.detector.sahi_retry_confidence_threshold, 4),
-            round(self.detector.sahi_retry_area_ratio_threshold, 6),
-            self.detector.sahi_retry_large_image_threshold,
-            round(self.detector.sahi_merge_iou_threshold, 4),
-            round(self.detector.crop_margin, 4),
+            # Parâmetros passados ao construtor do PaddleOCR.
             self.ocr.engine,
-            self.ocr.try_multiple_variants,
-            self.ocr.max_variants,
-            self.ocr.top_k_candidates,
-            round(self.ocr.confidence_threshold, 4),
-            round(self.ocr.fallback_threshold, 4),
             self.ocr.lang,
             self.ocr.use_gpu,
             self.ocr.use_angle_cls,
             self.ocr.det_limit_side_len,
             self.ocr.rec_batch_num,
             round(self.ocr.min_score, 4),
-            self.ocr.add_quiet_zone,
-            round(self.ocr.quiet_zone_ratio, 4),
+            # Identidade do cliente Premium.
             self.premium.enabled,
             self.premium.provider,
-            tuple(self.premium.regions),
-            round(self.premium.min_confidence, 4),
-            self.premium.timeout,
-            self.video.vehicle_mode.value,
-            self.video.skip_frames,
-            self.video.max_frames,
-            self.video.generate_output_video,
-            self.video.output_dir,
-            round(self.video.confidence_threshold, 4),
-            self.video.enable_temporal_voting,
-            self.video.temporal_strategy,
-            self.video.temporal_min_observations,
-            self.artifacts.enabled,
-            self.artifacts.output_dir,
-            self.artifacts.save_invalid,
-            self.artifacts.save_low_confidence,
-            round(self.artifacts.confidence_threshold, 4),
-            self.artifacts.max_saved_per_run,
-            round(self.scenarios.low_light.brightness_threshold, 4),
-            round(self.scenarios.low_light.contrast_threshold, 4),
-            round(self.scenarios.low_light.ocr_confidence_threshold, 4),
-            round(self.scenarios.low_light.fallback_confidence_threshold, 4),
-            self.scenarios.low_light.max_variants,
-            round(self.scenarios.small_plate.area_ratio_threshold, 6),
-            self.scenarios.small_plate.height_threshold,
-            round(self.scenarios.small_plate.ocr_confidence_threshold, 4),
-            round(self.scenarios.small_plate.fallback_confidence_threshold, 4),
-            self.scenarios.small_plate.max_variants,
-            self.scenarios.moving_video.skip_frames,
-            self.scenarios.moving_video.temporal_min_observations,
-            self.scenarios.stationary_video.skip_frames,
-            self.scenarios.stationary_video.temporal_min_observations,
-            self.evaluation.fixtures_dir,
-            self.evaluation.manifest_path,
-            self.evaluation.reports_dir,
-            tuple(round(value, 4) for value in self.calibration.detector_thresholds),
-            tuple(round(value, 4) for value in self.calibration.ocr_thresholds),
-            tuple(round(value, 4) for value in self.calibration.fallback_thresholds),
-            self.quality.enabled,
-            round(self.quality.low_quality_threshold, 4),
-            round(self.quality.snr_review_threshold, 4),
-            round(self.quality.motion_blur_review_threshold, 4),
-            self.forensic.enabled,
-            self.forensic.jpeg_quality,
-            round(self.forensic.review_threshold, 4),
-            round(self.forensic.high_risk_threshold, 4),
-            self.reports.enabled,
-            self.reports.output_dir,
-            self.reports.prefer_artifact_dir,
-            self.llm_validation.enabled,
-            self.llm_validation.base_url,
-            self.llm_validation.model,
-            round(self.llm_validation.timeout, 3),
-            self.llm_validation.allow_override,
-            round(self.llm_validation.ambiguity_gap_threshold, 4),
-            round(self.llm_validation.min_decision_confidence, 4),
-            self.vehicle_attributes.enabled,
-            round(self.vehicle_attributes.roi_width_scale, 4),
-            round(self.vehicle_attributes.roi_height_scale, 4),
+            bool(self.premium.api_key),
+            # Caminho do banco de histórico: trocá-lo exige reabrir a conexão.
+            self.storage.enabled,
+            self.storage.db_path,
         )
 
 
@@ -300,6 +254,7 @@ def build_v2_config(raw_config: Dict[str, Any]) -> AppConfig:
     reports_cfg = raw_config.get('reports', {})
     llm_cfg = raw_config.get('llm_validation', {})
     vehicle_cfg = raw_config.get('vehicle_attributes', {})
+    storage_cfg = raw_config.get('storage', {})
 
     requested_engine = str(ocr_cfg.get('engine', 'paddle')).lower()
     engine = 'paddle' if requested_engine != 'paddle' else requested_engine
@@ -497,6 +452,11 @@ def build_v2_config(raw_config: Dict[str, Any]) -> AppConfig:
         roi_height_scale=float(vehicle_cfg.get('roi_height_scale', 5.0)),
     )
 
+    storage = StorageConfig(
+        enabled=bool(storage_cfg.get('enabled', False)),
+        db_path=str(storage_cfg.get('db_path', 'data/results/alpr.db')),
+    )
+
     return AppConfig(
         detector=detector,
         ocr=ocr,
@@ -511,4 +471,6 @@ def build_v2_config(raw_config: Dict[str, Any]) -> AppConfig:
         reports=reports,
         llm_validation=llm_validation,
         vehicle_attributes=vehicle_attributes,
+        storage=storage,
     )
+

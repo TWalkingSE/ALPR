@@ -170,6 +170,57 @@ PLATE_POSITIONS_OLD = ['L', 'L', 'L', 'N', 'N', 'N', 'N']  # AAA-1234
 PLATE_POSITIONS_MERCOSUL = ['L', 'L', 'L', 'N', 'L', 'N', 'N']  # AAA1A23
 
 
+# ==================== FAIXAS DE PREFIXO POR ESTADO ====================
+
+# Fonte única de verdade para as faixas de prefixo (3 letras) atribuídas a cada
+# UF pelo registro nacional de veículos (DENATRAN/SENATRAN).
+#
+# Historicamente este dado existia duplicado em `src/validator.py` e
+# `src/plate_patterns.py`, com faixas DIVERGENTES entre as duas cópias (ex.: AP
+# como QOA-QPZ em um e OBA-OBZ no outro). Como ambas alimentam o mesmo score
+# composto de ranking de candidatos, o mesmo texto era pontuado por duas visões
+# incompatíveis do que é um prefixo plausível.
+#
+# A consolidação abaixo é a UNIÃO das duas listas. União — e não interseção —
+# porque este dado alimenta um score de plausibilidade: tratar um prefixo real
+# como implausível (falso negativo) rebaixa uma leitura correta, enquanto
+# aceitar um prefixo a mais apenas deixa de dar um bônus discriminativo. As
+# faixas podem se sobrepor entre estados; isso é esperado e inofensivo para o
+# uso atual, que é pertencimento a *alguma* faixa válida.
+BRAZILIAN_PREFIX_RANGES = {
+    'AC': [('NAA', 'NBZ'), ('QTA', 'QTZ')],
+    'AL': [('QRA', 'QSZ')],
+    'AP': [('OBA', 'OBZ'), ('QOA', 'QPZ')],
+    'AM': [('JWA', 'JZZ'), ('NOA', 'NQZ'), ('QLA', 'QNZ')],
+    'BA': [('JAA', 'JZZ'), ('NUA', 'NZZ'), ('OAA', 'OAZ'), ('QCA', 'QDZ')],
+    'CE': [('HTA', 'HZZ'), ('NCA', 'NFZ'), ('QFA', 'QHZ')],
+    'DF': [('JKA', 'JZZ'), ('OLA', 'OMZ'), ('QGA', 'QGZ')],
+    'ES': [('MTA', 'MZZ'), ('PPA', 'PPZ'), ('QBA', 'QBZ')],
+    'GO': [('NNA', 'NTZ'), ('OAA', 'OZZ'), ('QEA', 'QEZ')],
+    'MA': [('HSA', 'HSZ'), ('NGA', 'NMZ'), ('QIA', 'QIZ')],
+    'MT': [('JWA', 'JZZ'), ('NGA', 'NTZ'), ('QJA', 'QKZ')],
+    'MS': [('HRA', 'HRZ'), ('NCA', 'NFZ'), ('QQA', 'QQZ')],
+    'MG': [('GKJ', 'HOK'), ('HAA', 'HQZ'), ('OUA', 'OZZ'), ('QVA', 'QZZ')],
+    'PA': [('NNA', 'NNZ'), ('QOA', 'QPZ')],
+    'PB': [('OCA', 'OKZ'), ('QOA', 'QOZ')],
+    'PR': [('AAA', 'BEZ'), ('AXA', 'BFZ'), ('QMA', 'QMZ')],
+    'PE': [('KMA', 'LVE'), ('QPA', 'QPZ')],
+    'PI': [('OBA', 'OBZ'), ('QNA', 'QNZ')],
+    'RJ': [('KMF', 'LVE'), ('LAA', 'LZZ'), ('QQA', 'QSZ')],
+    'RN': [('NNA', 'NNZ'), ('QOA', 'QOZ')],
+    'RS': [('IAA', 'JZZ'), ('QUA', 'QUZ')],
+    'RO': [('NBA', 'NBZ'), ('QTA', 'QTZ')],
+    'RR': [('NCA', 'NCZ'), ('QOA', 'QOZ')],
+    'SC': [('MAA', 'MSZ'), ('QJA', 'QJZ')],
+    'SP': [('BFA', 'GKI'), ('CPA', 'GKZ'), ('QWA', 'QZZ')],
+    'SE': [('JSA', 'JTZ'), ('QOA', 'QOZ')],
+    'TO': [('NBA', 'NBZ'), ('QOA', 'QOZ')],
+}
+
+# Siglas das 27 unidades federativas (26 estados + Distrito Federal).
+BRAZILIAN_UFS = frozenset(BRAZILIAN_PREFIX_RANGES)
+
+
 # ==================== TERMOS FORENSES ====================
 
 FORENSIC_TERMS = {

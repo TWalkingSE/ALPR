@@ -62,7 +62,29 @@ def ensure_service_bundle(
         bundle = builder(config, project_dir, model_path)
         store_service_bundle(session, bundle, signature)
         return bundle
-    return ServiceBundle(pipeline=state.pipeline, premium=state.premium_service)
+
+    # Assinatura de construção inalterada: os modelos carregados continuam
+    # válidos e só os ajustes de runtime precisam ser propagados. É o que evita
+    # recarregar YOLO + PaddleOCR a cada slider da sidebar.
+    bundle = ServiceBundle(pipeline=state.pipeline, premium=state.premium_service)
+    _apply_runtime_config(bundle, config)
+    return bundle
+
+
+def _apply_runtime_config(bundle: ServiceBundle, config: AppConfig) -> None:
+    """Propaga a configuração de runtime para os serviços já construídos.
+
+    Usa duck typing porque `LocalAnalysisProvider` e `PremiumAnalysisProvider`
+    são Protocols que não exigem este método — dublês de teste não precisam
+    implementá-lo.
+    """
+    apply_pipeline = getattr(bundle.pipeline, 'apply_runtime_config', None)
+    if callable(apply_pipeline):
+        apply_pipeline(config)
+
+    apply_premium = getattr(bundle.premium, 'apply_runtime_config', None)
+    if callable(apply_premium):
+        apply_premium(config.premium)
 
 
 def run_local_image_analysis(
@@ -125,12 +147,20 @@ def run_video_analysis(
             temp_path = temp_file.name
 
         video_processor = processor_factory(config)
-        return video_processor.process_video(
+        video_result = video_processor.process_video(
             temp_path,
             pipeline=pipeline,
             detector_confidence=config.detector.confidence,
             progress_callback=progress_callback,
         )
+
+        # O caminho temporário não interessa no histórico: registra-se o nome
+        # original enviado pelo usuário.
+        store = getattr(pipeline, 'reading_store', None)
+        if store is not None:
+            store.record_video_run(video_result, video_path=filename)
+
+        return video_result
     finally:
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)

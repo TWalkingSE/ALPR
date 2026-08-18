@@ -308,6 +308,11 @@ class VideoProcessor:
         if not cap.isOpened():
             raise ValueError(f"Não foi possível abrir o vídeo: {video_path}")
 
+        # Inicializado antes do try: o bloco `finally` referencia esta variável e,
+        # se a leitura de metadados abaixo falhar, um UnboundLocalError mascararia
+        # a exceção real.
+        video_writer = None
+
         try:
             # Metadados
             result.total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -321,7 +326,6 @@ class VideoProcessor:
             result.duration_seconds = result.total_frames / result.fps if result.fps > 0 else 0
 
             # Preparar writer de saída
-            video_writer = None
             if self.generate_output_video:
                 output_path = self._get_output_path(video_path)
                 ext = Path(output_path).suffix.lower()
@@ -991,15 +995,15 @@ class VideoProcessor:
             unique_plates: Dicionário de placas únicas do VideoResult
             max_plates: Máximo de placas a retornar (padrão: MAX_UNIQUE_PLATES)
             
+        Não muta `unique_plates`: cada entrada retornada é uma cópia rasa
+        enriquecida com os scores. Este método é chamado a cada rerun do
+        Streamlit e mutar a entrada acumularia estado entre renderizações.
+
         Returns:
             Dicionário ordenado com as top N placas mais prováveis
         """
         if not unique_plates:
             return {}
-
-        if len(unique_plates) <= max_plates:
-            # Mesmo se não precisar cortar, ordena por score
-            pass
 
         # Calcular score composto para cada placa
         scored = []
@@ -1012,7 +1016,8 @@ class VideoProcessor:
             default=1
         )
 
-        for normalized, info in unique_plates.items():
+        for normalized, source_info in unique_plates.items():
+            info = dict(source_info)
             avg_conf = np.mean(info.get('all_confidences', [])) if info.get('all_confidences') else 0.0
             avg_quality = np.mean(info.get('quality_scores', [])) if info.get('quality_scores') else info.get('best_confidence', 0.0)
             char_confirmation = np.mean(info.get('char_confirmation_scores', [])) if info.get('char_confirmation_scores') else info.get('char_confirmation_ratio', 0.0)
@@ -1056,66 +1061,6 @@ class VideoProcessor:
         )
 
         return top_plates
-
-    def extract_best_frames(
-        self,
-        video_result: VideoResult,
-        video_path: str,
-        top_n: int = 5,
-    ) -> List[Tuple[str, np.ndarray, FrameResult]]:
-        """
-        Extrai os melhores frames (maior confiança) do vídeo.
-        
-        Args:
-            video_result: Resultado do processamento
-            video_path: Caminho do vídeo original
-            top_n: Número de frames a extrair
-            
-        Returns:
-            Lista de (plate_text, frame_image, frame_result)
-        """
-        # Encontrar frames com melhores detecções
-        ranked = self.rank_unique_plates(video_result.unique_plates, max_plates=top_n)
-        requested_frames = [
-            (info.get('best_frame_number'), info.get('plate_text', '?'))
-            for info in ranked.values()
-            if info.get('best_frame_number')
-        ]
-
-        if requested_frames:
-            best_frames = []
-            frame_map = {fr.frame_number: fr for fr in video_result.frame_results}
-            for frame_number, plate_text in requested_frames:
-                frame_result = frame_map.get(frame_number)
-                if frame_result is not None:
-                    best_frames.append((frame_result, plate_text))
-        else:
-            best_frames = [
-                (fr, fr.plate_texts[0] if fr.plate_texts else '?')
-                for fr in sorted(
-                    [fr for fr in video_result.frame_results if fr.plates_found > 0],
-                    key=lambda x: max(x.confidences) if x.confidences else 0,
-                    reverse=True
-                )[:top_n]
-            ]
-
-        if not best_frames:
-            return []
-
-        results = []
-        cap = cv2.VideoCapture(video_path)
-
-        try:
-            for fr, plate_label in best_frames:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, fr.frame_number - 1)
-                ret, frame = cap.read()
-                if ret:
-                    best_plate = plate_label or (fr.plate_texts[0] if fr.plate_texts else "?")
-                    results.append((best_plate, frame, fr))
-        finally:
-            cap.release()
-
-        return results
 
     def generate_timeline(self, video_result: VideoResult) -> List[Dict]:
         """

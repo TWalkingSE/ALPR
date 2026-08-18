@@ -117,6 +117,13 @@ reports:
   output_dir: data/results/reports
   prefer_artifact_dir: true
 
+# Historico persistente das leituras (SQLite, apenas stdlib).
+# Alimenta a aba "Historico" da interface e o endpoint /v1/plates/{placa} da API.
+# Desabilitado por padrao: o fluxo principal continua gerando os laudos JSON.
+storage:
+  enabled: false
+  db_path: data/results/alpr.db
+
 llm_validation:
   enabled: false
   base_url: http://127.0.0.1:11434

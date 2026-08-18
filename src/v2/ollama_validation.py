@@ -176,10 +176,13 @@ class OllamaSmartValidator:
             'quality_metrics': quality_metrics,
             'char_confidences': [[char, confidence] for char, confidence in char_confidences],
             'scenario_tags': list(scenario_tags),
+            # A placa Mercosul brasileira (LLLNLNN) aceita QUALQUER letra na 5a
+            # posicao, vogais inclusive. Nao enviar regra em contrario: o modelo
+            # passaria a descartar candidatos validos.
             'rules': {
                 'old_format': 'AAA1234',
                 'mercosul_format': 'AAA1A23',
-                'mercosul_position_5_cannot_be_vowel': True,
+                'mercosul_position_5_accepts_any_letter': True,
                 'must_choose_from_candidates_only': True,
                 'abstain_when_uncertain': True,
             },

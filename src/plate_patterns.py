@@ -20,41 +20,12 @@ import math
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
+# As faixas de prefixo por estado vivem em src/constants.py — fonte única
+# compartilhada com src/validator.py, para que o score de n-gram e o score de
+# plausibilidade de prefixo concordem sobre o que é um prefixo válido.
+from src.constants import BRAZILIAN_PREFIX_RANGES, RE_MERCOSUL, RE_OLD
+
 logger = logging.getLogger(__name__)
-
-# ==================== FAIXAS DE PLACAS POR ESTADO ====================
-# Fonte: Registro Nacional de Veículos Automotores (RENAVAM)
-# Formato: (inicio, fim) — faixa de 3 letras de prefixo
-
-BRAZILIAN_PREFIX_RANGES = {
-    'AC': [('NAA', 'NBZ'), ('QTA', 'QTZ')],
-    'AL': [('QRA', 'QSZ')],
-    'AP': [('OBA', 'OBZ')],
-    'AM': [('JWA', 'JZZ'), ('NOA', 'NQZ')],
-    'BA': [('JAA', 'JVZ'), ('NUA', 'NZZ'), ('OAA', 'OAZ'), ('QCA', 'QDZ')],
-    'CE': [('HTA', 'HZZ'), ('NCA', 'NFZ'), ('QFA', 'QHZ')],
-    'DF': [('JKA', 'JMZ'), ('OLA', 'OMZ'), ('QGA', 'QGZ')],
-    'ES': [('MTA', 'MZZ'), ('PPA', 'PPZ'), ('QBA', 'QBZ')],
-    'GO': [('NNA', 'NTZ'), ('OCA', 'OKZ'), ('QEA', 'QEZ')],
-    'MA': [('HSA', 'HSZ'), ('NGA', 'NMZ'), ('QIA', 'QIZ')],
-    'MT': [('JWA', 'JZZ'), ('NGA', 'NTZ'), ('QJA', 'QKZ')],
-    'MS': [('HRA', 'HRZ'), ('NCA', 'NFZ'), ('QQA', 'QQZ')],
-    'MG': [('GKJ', 'HOK'), ('HAA', 'HQZ'), ('OUA', 'OZZ'), ('QVA', 'QZZ')],
-    'PA': [('NNA', 'NNZ'), ('QOA', 'QPZ')],
-    'PB': [('OCA', 'OKZ'), ('QOA', 'QOZ')],
-    'PR': [('AAA', 'BEZ'), ('AXA', 'BFZ'), ('QMA', 'QMZ')],
-    'PE': [('KMA', 'LVE'), ('QPA', 'QPZ')],
-    'PI': [('OBA', 'OBZ'), ('QNA', 'QNZ')],
-    'RJ': [('KMF', 'LVE'), ('LAA', 'LZZ'), ('QQA', 'QSZ')],
-    'RN': [('NNA', 'NNZ'), ('QOA', 'QOZ')],
-    'RS': [('IAA', 'JJZ'), ('ICA', 'IJZ'), ('QUA', 'QUZ')],
-    'RO': [('NBA', 'NBZ'), ('QTA', 'QTZ')],
-    'RR': [('NCA', 'NCZ'), ('QOA', 'QOZ')],
-    'SC': [('MAA', 'MSZ'), ('QJA', 'QJZ')],
-    'SP': [('BFA', 'GKI'), ('CPA', 'GKZ'), ('QWA', 'QZZ')],
-    'SE': [('JSA', 'JTZ'), ('QOA', 'QOZ')],
-    'TO': [('NBA', 'NBZ'), ('QOA', 'QOZ')],
-}
 
 
 class PlateNgramModel:
@@ -85,9 +56,6 @@ class PlateNgramModel:
         # Prefixos válidos (3 letras)
         self._valid_prefixes: set = set()
 
-        # Estado por prefixo
-        self._prefix_to_state: Dict[str, str] = {}
-
         if enabled:
             self._build_model()
             logger.info(
@@ -114,7 +82,7 @@ class PlateNgramModel:
 
     def _enumerate_prefixes(self):
         """Enumera todos os prefixos de 3 letras válidos."""
-        for state, ranges in BRAZILIAN_PREFIX_RANGES.items():
+        for ranges in BRAZILIAN_PREFIX_RANGES.values():
             for (start, end) in ranges:
                 # Gerar todos os prefixos na faixa
                 for a in range(ord(start[0]), ord(end[0]) + 1):
@@ -125,7 +93,6 @@ class PlateNgramModel:
                             prefix = chr(a) + chr(b) + chr(c)
                             if start <= prefix <= end:
                                 self._valid_prefixes.add(prefix)
-                                self._prefix_to_state[prefix] = state
 
     def _build_positional_distributions(self):
         """Constrói P(char | posição) para posições 0, 1, 2."""
@@ -243,10 +210,9 @@ class PlateNgramModel:
             normalized = min(1.0, normalized + 0.15)
 
         # 4. Bonus por formato válido
-        import re
-        if re.match(r'^[A-Z]{3}[0-9]{4}$', clean):
+        if RE_OLD.match(clean):
             normalized = min(1.0, normalized + 0.05)
-        elif re.match(r'^[A-Z]{3}[0-9][A-Z][0-9]{2}$', clean):
+        elif RE_MERCOSUL.match(clean):
             # Mercosul: qualquer letra na 5ª posição é válida (vogais incluídas)
             normalized = min(1.0, normalized + 0.07)  # Mercosul ligeiramente preferido
 
@@ -286,64 +252,3 @@ class PlateNgramModel:
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored
-
-    def get_prefix_state(self, text: str) -> Optional[str]:
-        """
-        Retorna o estado brasileiro associado ao prefixo da placa.
-        
-        Args:
-            text: Texto da placa (mínimo 3 caracteres)
-            
-        Returns:
-            Sigla do estado ou None se prefixo não reconhecido
-        """
-        if len(text) < 3:
-            return None
-        prefix = text[:3].upper()
-        return self._prefix_to_state.get(prefix)
-
-    def is_valid_prefix(self, text: str) -> bool:
-        """Verifica se o prefixo pertence a uma faixa válida."""
-        if len(text) < 3:
-            return False
-        return text[:3].upper() in self._valid_prefixes
-
-    def get_likely_alternatives(
-        self,
-        text: str,
-        position: int,
-        top_n: int = 5,
-    ) -> List[Tuple[str, float]]:
-        """
-        Para uma posição específica, retorna as alternativas mais prováveis.
-        
-        Args:
-            text: Texto da placa
-            position: Posição a avaliar (0-6)
-            top_n: Número de alternativas a retornar
-            
-        Returns:
-            Lista de (caractere, probabilidade) ordenada
-        """
-        if position < 0 or position > 6:
-            return []
-
-        dist = self._positional_dist.get(position, {})
-
-        # Se posição tem bi-gram e temos contexto
-        if position in self._bigram_dist and position > 0 and len(text) > position - 1:
-            prev_char = text[position - 1].upper()
-            bigram = self._bigram_dist[position].get(prev_char, dist)
-            dist = bigram
-
-        sorted_chars = sorted(dist.items(), key=lambda x: x[1], reverse=True)
-        return sorted_chars[:top_n]
-
-    def get_status(self) -> Dict:
-        """Retorna status do modelo para UI."""
-        return {
-            'enabled': self.enabled,
-            'valid_prefixes': len(self._valid_prefixes),
-            'positional_distributions': len(self._positional_dist),
-            'bigram_distributions': len(self._bigram_dist),
-        }

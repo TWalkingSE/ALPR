@@ -70,7 +70,6 @@ class PremiumALPRProvider:
         timeout: int = 30,
         enabled: bool = True,
         log_all_calls: bool = True,
-        structured_logger: Any = None,
     ):
         """
         Args:
@@ -80,8 +79,7 @@ class PremiumALPRProvider:
             min_confidence: Confiança mínima para considerar resultado válido.
             timeout: Timeout HTTP em segundos.
             enabled: Se o provider está ativo.
-            log_all_calls: Se deve registrar cada chamada no structured_logger.
-            structured_logger: Instância de StructuredLogger (opcional).
+            log_all_calls: Se deve registrar cada chamada realizada.
         """
         self.provider = provider.lower()
         self.api_key = api_key or ''
@@ -90,9 +88,21 @@ class PremiumALPRProvider:
         self.timeout = timeout
         self.enabled = enabled
         self.log_all_calls = log_all_calls
-        self.structured_logger = structured_logger
         self.total_calls = 0
-        self.available = self._check_availability()
+        self._availability: Optional[bool] = None
+
+    @property
+    def available(self) -> bool:
+        """Indica se o provider pode ser usado, verificando sob demanda.
+
+        A checagem de conectividade faz uma chamada HTTP bloqueante de até 5s.
+        Fazê-la no construtor custava essa latência a cada reconstrução do
+        pipeline; aqui ela roda no máximo uma vez por instância, na primeira
+        consulta real, e o resultado fica em cache.
+        """
+        if self._availability is None:
+            self._availability = self._check_availability()
+        return self._availability
 
     def _check_availability(self) -> bool:
         """Verifica se o provider pode ser usado."""
@@ -168,22 +178,17 @@ class PremiumALPRProvider:
                 error=f'Provider {self.provider} não implementado',
             )
 
-        # Registrar no structured_logger
-        if self.log_all_calls and self.structured_logger:
-            try:
-                self.structured_logger._write_event({
-                    'event_type': 'premium_api_call',
-                    'provider': self.provider,
-                    'success': result.success,
-                    'plate_text': result.plate_text,
-                    'confidence': round(result.confidence, 4),
-                    'format_type': result.format_type,
-                    'region': result.region,
-                    'vehicle_type': result.vehicle_type,
-                    'error': result.error,
-                })
-            except Exception as e:
-                logger.debug(f"Falha ao logar chamada Premium: {e}")
+        if self.log_all_calls:
+            logger.info(
+                "Premium API [%s]: success=%s plate=%r conf=%.4f formato=%s regiao=%s erro=%s",
+                self.provider,
+                result.success,
+                result.plate_text,
+                result.confidence,
+                result.format_type,
+                result.region or '-',
+                result.error or '-',
+            )
 
         return result
 

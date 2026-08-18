@@ -46,6 +46,8 @@ def get_default_config() -> Dict[str, Any]:
                 'det_limit_side_len': 960,
                 'rec_batch_num': 6,
                 'min_score': 0.3,
+                'add_quiet_zone': False,
+                'quiet_zone_ratio': 0.12,
             },
         },
         'premium_api': {
@@ -73,6 +75,7 @@ def get_default_config() -> Dict[str, Any]:
             'max_frames': 0,
             'generate_output_video': True,
             'output_dir': 'data/results',
+            'confidence_threshold': 0.6,
         },
         'artifacts': {
             'enabled': True,
@@ -135,6 +138,10 @@ def get_default_config() -> Dict[str, Any]:
             'output_dir': 'data/results/reports',
             'prefer_artifact_dir': True,
         },
+        'storage': {
+            'enabled': False,
+            'db_path': 'data/results/alpr.db',
+        },
         'llm_validation': {
             'enabled': False,
             'base_url': 'http://127.0.0.1:11434',
@@ -143,6 +150,11 @@ def get_default_config() -> Dict[str, Any]:
             'allow_override': True,
             'ambiguity_gap_threshold': 0.12,
             'min_decision_confidence': 0.70,
+        },
+        'vehicle_attributes': {
+            'enabled': False,
+            'roi_width_scale': 3.0,
+            'roi_height_scale': 5.0,
         },
     }
 

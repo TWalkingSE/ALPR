@@ -7,7 +7,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -26,6 +26,7 @@ from src.v2.models import LocalPlateResult, normalize_plate_text
 from src.v2.ollama_validation import OllamaSmartValidator
 from src.v2.quality import QualityAssessor
 from src.v2.reporting import ReportBuilder
+from src.v2.storage import ReadingStore
 from src.v2.vehicle_attributes import VehicleAttributeAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -71,14 +72,62 @@ class LocalAnalysisPipeline:
         self.ocr_engine = ocr_engine
         self.validator = validator
         self.ngram_model = ngram_model
+        # Preenchido por src/v2/application.py apos a construcao; lido pela UI
+        # em src/v2/ui/display.py para exibir o status da API Premium.
+        self.premium_provider = None
+        self._saved_artifacts = 0
+        # A conexão SQLite não pode ser reaberta a cada mudança de sidebar, por
+        # isso o store vive fora de apply_runtime_config (ver AppConfig.signature).
+        self.reading_store = (
+            ReadingStore.from_settings(config.storage) if config.storage.enabled else None
+        )
+        self.apply_runtime_config(config)
+
+    def apply_runtime_config(self, config: AppConfig) -> None:
+        """Aplica a configuração que NÃO exige reconstruir objetos pesados.
+
+        O detector YOLO e o `PaddleOCREngine` continuam os mesmos: aqui só são
+        reatribuídos thresholds, colaboradores leves e atributos lidos a cada
+        chamada. Ver `AppConfig.signature` para o critério de separação.
+
+        Chamado pelo construtor e novamente por `ensure_service_bundle` sempre
+        que a sidebar muda algo que não invalida os modelos carregados.
+        """
         self.config = config
+
         self.ocr_confidence_threshold = config.ocr.confidence_threshold
         self.fallback_threshold = config.ocr.fallback_threshold
         self.top_k_candidates = config.ocr.top_k_candidates
-        self.llm_threshold = config.llm_validation.min_decision_confidence
-        self.premium_provider = None
         self._artifact_output_dir = Path(config.artifacts.output_dir)
-        self._saved_artifacts = 0
+
+        # Atributos lidos a cada detect() — trocá-los não invalida os pesos.
+        self.detector.confidence = config.detector.confidence
+        self.detector.enable_sahi = config.detector.enable_sahi
+        self.detector.sahi_slice_size = config.detector.sahi_slice_size
+        self.detector.sahi_overlap_ratio = config.detector.sahi_overlap_ratio
+        self.detector.sahi_retry_confidence_threshold = (
+            config.detector.sahi_retry_confidence_threshold
+        )
+        self.detector.sahi_retry_area_ratio_threshold = (
+            config.detector.sahi_retry_area_ratio_threshold
+        )
+        self.detector.sahi_retry_large_image_threshold = (
+            config.detector.sahi_retry_large_image_threshold
+        )
+        self.detector.sahi_merge_iou_threshold = config.detector.sahi_merge_iou_threshold
+
+        # Idem para o OCR: quantidade de variantes e zona de silêncio são lidas
+        # em tempo de reconhecimento, não na construção do modelo.
+        self.ocr_engine.try_multiple_variants = config.ocr.try_multiple_variants
+        self.ocr_engine.max_variants = config.ocr.max_variants
+        self.ocr_engine.max_candidates = config.ocr.top_k_candidates
+        self.preprocessor.multi_binarization = config.ocr.try_multiple_variants
+        engine = getattr(self.ocr_engine, 'engine', None)
+        if engine is not None:
+            engine.add_quiet_zone = config.ocr.add_quiet_zone
+            engine.quiet_zone_ratio = config.ocr.quiet_zone_ratio
+
+        # Colaboradores opcionais: baratos de reconstruir (nenhum carrega pesos).
         self.quality_assessor = QualityAssessor() if config.quality.enabled else None
         self.llm_validator = (
             OllamaSmartValidator.from_settings(config.llm_validation)
@@ -174,6 +223,7 @@ class LocalAnalysisPipeline:
             auto_fallback_on_failure=False,
             try_multiple_variants=config.ocr.try_multiple_variants,
             max_variants=config.ocr.max_variants,
+            max_candidates=config.ocr.top_k_candidates,
         )
 
         return cls(
@@ -289,8 +339,14 @@ class LocalAnalysisPipeline:
             quality_assessment=quality_assessment,
         )
 
+        variant_budget = max(0, context_profile.effective_max_variants - 1)
+
         step_start = time.perf_counter()
-        variants = self.preprocessor.process(normalized, quality_result=context_profile)
+        variants = self.preprocessor.process(
+            normalized,
+            quality_result=context_profile,
+            max_variants=variant_budget,
+        )
         step_times['preprocessing'] = (time.perf_counter() - step_start) * 1000
         if not variants:
             warnings.append('preprocess_empty')
@@ -298,10 +354,14 @@ class LocalAnalysisPipeline:
 
         step_start = time.perf_counter()
         ocr_variant_pool = self._prioritize_ocr_variants(variants[1:])
-        variant_budget = max(0, context_profile.effective_max_variants - 1)
         ocr_results = self.ocr_engine.recognize(
             image=normalized,
-            original_image=normalized,
+            # Crop bruto do detector, ANTES da normalização geométrica: é isso
+            # que dá sentido ao fallback do OCRManager. Passar a própria imagem
+            # normalizada (como era feito antes) apenas repetia o OCR sobre a
+            # mesma entrada que acabara de falhar; quando a retificação
+            # distorce a placa, o crop original ainda pode ser legível.
+            original_image=original_crop,
             preprocessed_variants=ocr_variant_pool[:variant_budget],
             visual_format_hint=None,
         )
@@ -314,6 +374,12 @@ class LocalAnalysisPipeline:
         normalized_raw = normalize_plate_text(raw_text)
         confidence = float(ocr_best.get('confidence', 0.0))
         raw_char_confidences = ocr_best.get('char_confidences', [])
+
+        # O limiar de OCR do cenario (low_light / small_plate / low_snr) marca a
+        # leitura como abaixo do esperado. Nao descartamos o resultado: perder a
+        # deteccao seria pior que entrega-la sinalizada para revisao.
+        if confidence < context_profile.effective_ocr_threshold:
+            warnings.append('below_ocr_threshold')
 
         step_start = time.perf_counter()
         validation_details = self.validator.describe_validation(normalized_raw)
@@ -329,7 +395,7 @@ class LocalAnalysisPipeline:
             normalized_final = normalize_plate_text(final_text)
             is_valid = False
 
-        format_type = validation_details.get('format', self._detect_format(normalized_final))
+        format_type = validation_details.get('format', 'unknown')
         char_confidences = self._build_char_confidences(
             final_text,
             raw_char_confidences,
@@ -403,7 +469,7 @@ class LocalAnalysisPipeline:
                     is_valid = True
                 else:
                     is_valid = False
-                format_type = validation_details.get('format', self._detect_format(normalized_final))
+                format_type = validation_details.get('format', 'unknown')
                 char_confidences = self._build_char_confidences(
                     final_text,
                     raw_char_confidences,
@@ -463,7 +529,10 @@ class LocalAnalysisPipeline:
         result.artifact_dir = artifact_dir
         result.artifact_files = artifact_files
 
+        # Fixado ANTES de gerar o laudo: o payload copia este valor, e o laudo
+        # sairia com tempo zerado se só medíssemos depois.
         result.processing_time_ms = (time.perf_counter() - start_total) * 1000
+
         if self.report_builder.enabled:
             step_start = time.perf_counter()
             report_payload, report_path = self.report_builder.generate(
@@ -474,6 +543,12 @@ class LocalAnalysisPipeline:
             step_times['reporting'] = (time.perf_counter() - step_start) * 1000
             result.report_payload = report_payload
             result.report_path = report_path
+
+        # Depois do laudo: o sha256 da fonte vem do payload gerado acima.
+        if self.reading_store is not None:
+            step_start = time.perf_counter()
+            self.reading_store.record_result(result, source_path=input_file_path or '')
+            step_times['history_persistence'] = (time.perf_counter() - step_start) * 1000
 
         result.processing_time_ms = (time.perf_counter() - start_total) * 1000
         return result
@@ -679,7 +754,8 @@ class LocalAnalysisPipeline:
         validated_text: str,
         confidence: float,
         raw_char_confidences: Any,
-        ocr_candidates: Optional[List[Dict[str, Any]]] = None,
+        # Aceita OCRResult (TypedDict) e dicts simples: só campos comuns são lidos.
+        ocr_candidates: Optional[Sequence[Mapping[str, Any]]] = None,
         context_profile: Optional[PlateContextProfile] = None,
         temporal_prior: Optional[Dict[str, float]] = None,
     ) -> List[Dict[str, Any]]:
@@ -1129,13 +1205,6 @@ class LocalAnalysisPipeline:
             return
         cv2.imwrite(str(path), image)
 
-    def _detect_format(self, plate_text: str) -> str:
-        if self.validator.is_mercosul_format(plate_text):
-            return 'mercosul'
-        if self.validator.is_old_format(plate_text):
-            return 'old'
-        return 'unknown'
-
     @staticmethod
     def _describe_changes(raw_text: str, candidate: str) -> str:
         raw = normalize_plate_text(raw_text)
@@ -1174,4 +1243,5 @@ class LocalAnalysisPipeline:
             'forensic_review_enabled': self.forensic_analyzer is not None,
             'reporting_enabled': self.report_builder.enabled,
             'vehicle_attributes_enabled': self.vehicle_analyzer is not None,
+            'history_enabled': self.reading_store is not None,
         }

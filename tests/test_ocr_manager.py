@@ -188,9 +188,11 @@ class TestConsensusCharConfidences:
         variants = [_dummy_image(), _dummy_image()]  # principal + 2 variantes = 3 chamadas
         out = mgr.recognize(_dummy_image(), preprocessed_variants=variants)
 
-        assert len(out) == 1
+        # O melhor vem primeiro; a leitura divergente é preservada como
+        # candidata para o ranking top-k do pipeline.
+        assert out[0]['text'] == 'ABC1D23'
+        assert [r['text'] for r in out] == ['ABC1D23', 'ABC1O23']
         best = out[0]
-        assert best['text'] == 'ABC1D23'
         assert best['confidence'] == 0.90  # confiança da linha não muda
         char_confs = best['char_confidences']
         assert len(char_confs) == 7
@@ -210,6 +212,55 @@ class TestConsensusCharConfidences:
         assert len(char_confs) == 7
         # Concordância total → todas as posições com confiança alta (~conf média).
         assert all(c[1] > 0.85 for c in char_confs)
+
+    def test_distinct_variant_readings_become_candidates(self):
+        # Três leituras distintas entre variantes: todas viram candidatas,
+        # ordenadas por confiança, com a melhor na frente.
+        engine = _PerCallEngine([
+            ('ABC1D23', 0.90),
+            ('ABC1O23', 0.80),
+            ('A8C1D23', 0.60),
+        ])
+        mgr = OCRManager(engine=engine, try_multiple_variants=True)
+        out = mgr.recognize(
+            _dummy_image(),
+            preprocessed_variants=[_dummy_image(), _dummy_image()],
+        )
+
+        assert [r['text'] for r in out] == ['ABC1D23', 'ABC1O23', 'A8C1D23']
+
+    def test_duplicate_readings_are_deduplicated(self):
+        # A mesma leitura em várias variantes não deve gerar candidatas repetidas.
+        engine = _PerCallEngine([
+            ('ABC1D23', 0.90),
+            ('ABC1D23', 0.85),
+            ('ABC1O23', 0.70),
+        ])
+        mgr = OCRManager(engine=engine, try_multiple_variants=True)
+        out = mgr.recognize(
+            _dummy_image(),
+            preprocessed_variants=[_dummy_image(), _dummy_image()],
+        )
+
+        texts = [r['text'] for r in out]
+        assert texts == ['ABC1D23', 'ABC1O23']
+        assert len(texts) == len(set(texts))
+
+    def test_max_candidates_limits_output(self):
+        engine = _PerCallEngine([
+            ('ABC1D23', 0.90),
+            ('ABC1O23', 0.80),
+            ('A8C1D23', 0.70),
+            ('ABC1D28', 0.60),
+        ])
+        mgr = OCRManager(engine=engine, try_multiple_variants=True, max_candidates=2)
+        out = mgr.recognize(
+            _dummy_image(),
+            preprocessed_variants=[_dummy_image(), _dummy_image(), _dummy_image()],
+        )
+
+        assert len(out) == 2
+        assert out[0]['text'] == 'ABC1D23'
 
     def test_single_reading_no_consensus_change(self):
         # Sem variantes adicionais não há consenso a calcular: não deve crashar.
